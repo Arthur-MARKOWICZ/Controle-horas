@@ -1,0 +1,518 @@
+---
+description: Regras para desenvolvimento do Front-end React.
+globs:
+  - frontend/**
+alwaysApply: true
+---
+
+# Frontend Rules
+
+## Objetivo
+
+O Front-end é responsável exclusivamente pela interface do usuário.
+
+Toda regra de negócio deve ser implementada no Back-end.
+
+O Front-end apenas:
+
+- Consome a API REST
+- Exibe informações
+- Coleta dados do usuário
+- Gerencia estados da interface
+
+Nunca calcular informações oficiais no cliente.
+
+---
+
+# Stack
+
+Utilizar obrigatoriamente:
+
+- React 19
+- Vite
+- React Router DOM
+- Axios
+- CSS Modules
+- Chart.js
+- React Hook Form
+
+Evitar adicionar bibliotecas sem necessidade.
+
+Sempre preferir soluções simples.
+
+---
+
+# Estrutura do Projeto
+
+```
+frontend/
+
+public/
+
+src/
+
+assets/
+
+components/
+
+layouts/
+
+pages/
+
+routes/
+
+services/
+
+hooks/
+
+contexts/
+
+utils/
+
+styles/
+
+App.jsx
+
+main.jsx
+```
+
+Cada pasta possui responsabilidade única.
+
+---
+
+# Arquitetura
+
+A aplicação deve seguir o fluxo:
+
+Pages
+
+↓
+
+Components
+
+↓
+
+Hooks
+
+↓
+
+Services
+
+↓
+
+REST API
+
+↓
+
+Spring Boot
+
+Nunca inverter essa dependência.
+
+---
+
+# Components
+
+Os componentes devem ser:
+
+- Pequenos
+- Reutilizáveis
+- Independentes
+
+Evitar componentes com mais de 200 linhas.
+
+Caso cresçam, dividir em componentes menores.
+
+Exemplo
+
+```
+Dashboard
+
+├── HourCard
+
+├── StatisticsCard
+
+├── WorkLogCard
+
+├── Header
+
+└── HistoryTable
+```
+
+---
+
+# Pages
+
+Cada página deve apenas organizar componentes.
+
+Exemplo
+
+```
+pages/
+
+Login
+
+Dashboard
+
+History
+
+Settings
+```
+
+Evitar lógica de negócio nas páginas.
+
+---
+
+# Layouts
+
+Criar layouts reutilizáveis.
+
+Exemplo
+
+```
+MainLayout
+
+AuthLayout
+```
+
+Nunca duplicar Navbar, Sidebar ou Footer.
+
+---
+
+# Services
+
+Toda comunicação com a API deve ocorrer através de Services.
+
+Exemplo
+
+```
+services/
+
+api.js
+
+authService.js
+
+dashboardService.js
+
+workLogService.js
+
+userService.js
+```
+
+Nunca utilizar fetch() ou axios diretamente dentro dos componentes.
+
+---
+
+# Axios
+
+Criar uma instância única.
+
+Configurar:
+
+- Base URL
+- Timeout
+- Authorization
+- Interceptors
+
+Nunca repetir configurações.
+
+---
+
+# Hooks
+
+Toda lógica reutilizável deve ser extraída para Hooks.
+
+Exemplo
+
+```
+hooks/
+
+useAuth()
+
+useDashboard()
+
+useClock()
+
+useWorkLog()
+
+useHourBalance()
+```
+
+Evitar duplicação de lógica.
+
+---
+
+# Context API
+
+Utilizar Context apenas para estados globais.
+
+Exemplo
+
+```
+AuthContext
+
+ThemeContext
+```
+
+Não utilizar Context para estados locais.
+
+Evitar criar Context desnecessários.
+
+---
+
+# Estado
+
+Sempre utilizar:
+
+useState
+
+useEffect
+
+useMemo
+
+useCallback
+
+Quando fizer sentido.
+
+Evitar otimizações prematuras.
+
+---
+
+# React Router
+
+Utilizar React Router.
+
+Separar rotas em:
+
+```
+routes/
+
+AppRoutes.jsx
+```
+
+Rotas protegidas devem verificar autenticação.
+
+---
+
+# Formulários
+
+Utilizar React Hook Form.
+
+Sempre validar:
+
+- campos obrigatórios
+- e-mail
+- senha
+
+Validação no Front-end nunca substitui validação do Back-end.
+
+---
+
+# Comunicação com API
+
+Sempre tratar:
+
+401
+
+403
+
+404
+
+500
+
+Timeout
+
+Erro de conexão
+
+Nunca deixar erros sem tratamento.
+
+---
+
+# JWT
+
+Armazenar JWT no LocalStorage.
+
+Enviar automaticamente utilizando Axios Interceptor.
+
+Nunca armazenar senha.
+
+---
+
+# Interface
+
+A interface deve ser:
+
+- Moderna
+- Limpa
+- Responsiva
+- Simples
+
+Evitar excesso de informações.
+
+Priorizar usabilidade.
+
+---
+
+# Dashboard
+
+O Dashboard deve apresentar:
+
+- Entrada
+- Saída prevista
+- Horas trabalhadas
+- Tempo restante
+- Saldo do dia
+- Banco de horas
+- Hora atual
+- Data atual
+
+As informações devem ser atualizadas sem necessidade de recarregar a página.
+
+---
+
+# Gráficos
+
+Utilizar Chart.js.
+
+Gráficos previstos:
+
+- Banco de horas por mês
+- Evolução do saldo
+- Horas trabalhadas
+
+Nunca duplicar lógica de preparação dos dados.
+
+---
+
+# CSS
+
+Utilizar CSS Modules.
+
+Evitar CSS global.
+
+Criar variáveis para:
+
+- cores
+- fontes
+- espaçamentos
+- bordas
+
+---
+
+# Responsividade
+
+O sistema deve funcionar em:
+
+Desktop
+
+Notebook
+
+Tablet
+
+Celular
+
+Sempre utilizar Flexbox.
+
+Utilizar Grid apenas quando necessário.
+
+---
+
+# Tema
+
+Implementar inicialmente:
+
+Tema Claro
+
+Preparar arquitetura para:
+
+Tema Escuro
+
+Evitar cores hardcoded.
+
+Sempre utilizar variáveis CSS.
+
+---
+
+# Performance
+
+Utilizar:
+
+React.memo
+
+useMemo
+
+useCallback
+
+Apenas quando realmente melhorarem desempenho.
+
+Nunca otimizar prematuramente.
+
+---
+
+# Organização
+
+Separar:
+
+Interface
+
+Lógica
+
+Comunicação
+
+Utilidades
+
+Nunca misturar responsabilidades.
+
+---
+
+# Tratamento de Erros
+
+Sempre fornecer feedback ao usuário.
+
+Exemplo:
+
+Loading
+
+Erro
+
+Sucesso
+
+Nunca deixar ações sem retorno visual.
+
+---
+
+# Acessibilidade
+
+Sempre utilizar:
+
+- labels
+- aria-label
+- contraste adequado
+- navegação por teclado
+
+Sempre utilizar HTML semântico.
+
+---
+
+# Filosofia
+
+O Front-end deve ser simples.
+
+A maior parte da inteligência do sistema pertence ao Back-end.
+
+O Front-end deve apenas refletir o estado da aplicação.
+
+---
+
+# Como o Cursor deve agir
+
+Antes de criar um componente:
+
+- Procurar componente semelhante.
+- Reutilizar componentes existentes.
+- Evitar duplicação.
+- Criar componentes desacoplados.
+- Seguir a estrutura definida.
+- Utilizar Services para comunicação.
+- Utilizar Hooks para lógica reutilizável.
+
+Sempre priorizar legibilidade e manutenção.

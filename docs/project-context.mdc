@@ -1,0 +1,270 @@
+---
+
+# Project Context
+
+## Objetivo
+
+Este projeto consiste em uma aplicação web para controle de banco de horas.
+
+O objetivo é permitir que um usuário registre sua entrada e saída diária, acompanhe seu saldo de horas e visualize o horário previsto para encerrar sua jornada.
+
+O sistema foi criado inicialmente para uso pessoal, porém deverá possuir arquitetura suficientemente organizada para servir como projeto de portfólio.
+
+Sempre priorizar código limpo, reutilização e facilidade de manutenção.
+
+---
+
+# Stack
+
+Backend
+
+- Java 21
+- Spring Boot
+- Spring Security
+- JWT
+- Spring Data JPA
+- Flyway
+- heathCheck
+- Maven
+
+Frontend
+
+- HTML
+- CSS
+- JavaScript (React)
+
+Banco
+
+- PostgreSQL (Neon)
+
+Deploy
+
+Frontend
+
+- Cloudflare Pages
+
+Backend
+
+- Render
+
+Versionamento
+
+Git + GitHub
+
+---
+
+# Arquitetura
+
+O projeto é um Monorepo.
+
+```
+/
+backend
+frontend
+docs
+.cursor
+```
+
+Backend e Frontend possuem responsabilidades totalmente separadas.
+
+O Backend nunca deve conhecer detalhes da interface.
+
+O Frontend nunca deve possuir regras de negócio.
+
+Toda regra de negócio pertence ao Backend.
+
+---
+
+# Objetivos do Projeto
+
+O projeto deve demonstrar conhecimento em:
+
+- Spring Boot
+- REST API
+- PostgreSQL
+- Flyway
+- JWT
+- Java
+- HTML
+- CSS
+- JavaScript
+- Deploy
+- Git
+- Clean Architecture
+
+---
+
+# Regras de Negócio
+
+A aplicação calcula banco de horas.
+
+Existe apenas um usuário por enquanto.
+
+O Usuario deve cadastrar e editar a sua carga horaria
+
+A saída prevista é calculada automaticamente.
+
+```
+Saída Prevista
+
+=
+
+Entrada
+
++
+
+Carga diária
+```
+
+Exemplo
+
+Entrada
+
+08:15
+
+Carga
+
+8h50
+
+Saída prevista
+
+17:05
+
+Quando registrar a saída:
+
+Horas Trabalhadas
+
+=
+
+Saída
+
+- 
+
+Entrada
+
+Saldo
+
+=
+
+Horas Trabalhadas
+
+- 
+
+Carga diária
+
+Banco de Horas
+
+=
+
+Soma dos saldos diários.
+
+---
+
+# Filosofia
+
+Sempre escolher:
+
+Legibilidade > Performance
+
+Manutenção > Código inteligente
+
+Simplicidade > Complexidade
+
+Código explícito > Código implícito
+
+---
+
+# MVP
+
+O MVP deve conter apenas:
+
+Login
+
+Cadastro
+
+Dashboard
+
+Registro de Entrada
+
+Registro de Saída
+
+Histórico
+
+Banco de Horas
+
+Cálculo automático da saída prevista
+
+Nada além disso.
+
+---
+
+# Roadmap
+
+Versão 1
+
+✔ Login
+
+✔ Registro
+
+✔ Dashboard
+
+✔ Histórico
+
+✔ Banco de Horas
+
+- pode colocar pause dentro do dia
+
+Versão 2
+
+- Exportação PDF
+- Exportação Excel
+- Tema escuro
+- Responsividade
+- Controle de hora de almoço
+- Classificação de Usuarios(Admin , gestores e usuario comun)
+- Download de .csv e .xslx para migração de dados de outro sistema
+
+Versão 3
+
+- PWA
+- Notificações
+- Calendário
+- Estatísticas
+
+---
+
+# Estrutura Esperada
+
+backend
+
+Controller
+
+↓
+
+Service
+
+↓
+
+Repository
+
+↓
+
+Database
+
+Frontend
+
+Pages
+
+↓
+
+Components
+
+↓
+
+Services
+
+↓
+
+API
+
+---

@@ -1,0 +1,225 @@
+---
+description: Regras para desenvolvimento do Back-end Spring Boot.
+globs:
+  - backend/**
+alwaysApply: true
+---
+
+# Backend Rules
+
+## Stack
+
+- Java 21
+- Spring Boot 3
+- Spring Security
+- JWT
+- Spring Data JPA
+- PostgreSQL
+- Flyway
+- Maven
+
+---
+
+# Estrutura
+
+src/main/java
+
+controller
+
+service
+
+repository
+
+entity
+
+dto
+
+config
+
+security
+
+exception
+
+mapper
+
+util
+
+Nunca criar classes fora desta estrutura sem justificativa.
+
+---
+
+# Controllers
+
+Os Controllers devem:
+
+- receber DTO
+- validar entrada
+- chamar Service
+- retornar ResponseEntity
+
+Nunca acessar Repository.
+
+Nunca conter regras de negócio.
+
+---
+
+# Services
+
+Toda lógica deve existir aqui.
+
+Exemplos:
+
+- calcular saída prevista
+- calcular saldo
+- calcular banco de horas
+- autenticação
+
+---
+
+# Repository
+
+Utilizar Spring Data JPA.
+
+Nunca escrever consultas complexas quando o JPA resolver.
+
+Usar @Query apenas quando realmente necessário.
+
+---
+
+# Entities
+
+Representam apenas o banco.
+
+Não implementar lógica.
+
+Não retornar diretamente para API.
+
+---
+
+# DTO
+
+Sempre utilizar DTO.
+
+Separar:
+
+Request
+
+Response
+
+Nunca reutilizar DTOs para finalidades diferentes.
+
+---
+
+# Validação
+
+Utilizar Bean Validation.
+
+Exemplo:
+
+@NotNull
+
+@NotBlank
+
+@Email
+
+@Size
+
+Toda validação deve acontecer antes da Service.
+
+---
+
+# Exceptions
+
+Criar GlobalExceptionHandler.
+
+Nunca deixar stacktrace chegar ao cliente.
+
+Mensagens devem ser claras.
+
+---
+
+# Segurança
+
+Utilizar:
+
+JWT
+
+BCrypt
+
+Spring Security
+
+Nunca armazenar senha sem criptografia.
+
+---
+
+# Configuração
+
+Toda configuração deve utilizar:
+
+application.yml
+
+Nunca hardcodar:
+
+URLs
+
+Segredos
+
+Tokens
+
+Credenciais
+
+Utilizar variáveis de ambiente.
+
+---
+
+# Flyway
+
+Toda alteração do banco deve gerar migration.
+
+Nunca editar migrations já executadas.
+
+---
+
+# API
+
+Seguir REST.
+
+GET
+
+POST
+
+PUT
+
+DELETE
+
+Utilizar códigos HTTP corretos.
+
+---
+
+# Respostas
+
+Sempre retornar JSON.
+
+Formato consistente.
+
+Exemplo
+
+{
+    "success": true,
+    "message": "...",
+    "data": {}
+}
+
+---
+
+# Testes
+
+Priorizar:
+
+Service
+
+Repository
+
+Controller
+
+Sempre que possível criar testes para regras críticas.

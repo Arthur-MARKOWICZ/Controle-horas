@@ -1,0 +1,202 @@
+.page {
+  width: 100%;
+}
+
+.centered {
+  min-height: 40vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-lg);
+}
+
+.date,
+.description,
+.empty {
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-lg);
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.summaryCard,
+.card,
+.tableCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+}
+
+.summaryCard h2,
+.card h2,
+.tableCard h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+}
+
+.summaryValue {
+  margin: var(--space-sm) 0 0;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+.actionButton {
+  width: 100%;
+  margin-top: var(--space-lg);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: white;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.actionButton:hover {
+  background: var(--color-primary-hover);
+}
+
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.workloadForm {
+  margin-top: var(--space-md);
+}
+
+.workloadForm label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--space-xs);
+}
+
+.timeFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.timeFields input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem;
+  background: white;
+}
+
+.workloadForm button {
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: white;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.fieldError,
+.error {
+  color: var(--color-danger);
+  margin: var(--space-sm) 0 0;
+}
+
+.success {
+  color: var(--color-primary);
+  margin: var(--space-lg) 0 0;
+  font-weight: 600;
+}
+
+.tableCard {
+  margin-top: var(--space-lg);
+}
+
+.tableHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.tableHeader span {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  margin-top: var(--space-lg);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+}
+
+th,
+td {
+  padding: 0.85rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+th {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.open,
+.completed {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.open {
+  background: #fff3cd;
+  color: #725c00;
+}
+
+.completed {
+  background: #dff4e8;
+  color: #145c3a;
+}
+
+@media (max-width: 56rem) {
+  .summaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 42rem) {
+  .grid,
+  .timeFields,
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .card,
+  .tableCard,
+  .summaryCard {
+    padding: var(--space-lg);
+  }
+}

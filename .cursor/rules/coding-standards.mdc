@@ -1,0 +1,349 @@
+---
+description: Convenções de desenvolvimento e padrões obrigatórios.
+alwaysApply: true
+---
+
+# Coding Standards
+
+Todas as respostas devem seguir estas regras.
+
+---
+
+# Clean Code
+
+Sempre seguir:
+
+- SOLID
+- DRY
+- KISS
+- YAGNI
+
+Nunca gerar código desnecessário.
+
+---
+
+# Organização
+
+Uma classe deve possuir apenas uma responsabilidade.
+
+Métodos devem ser pequenos.
+
+Métodos grandes devem ser divididos.
+
+Evitar classes gigantes.
+
+---
+
+# Nomeação
+
+Tudo deve estar em inglês.
+
+Exemplos
+
+User
+
+WorkLog
+
+HourBalance
+
+DashboardService
+
+Nunca utilizar abreviações.
+
+Ruim
+
+```
+Usr
+
+Ctl
+
+Srv
+```
+
+Bom
+
+```
+UserRepository
+
+DashboardController
+
+HourBalanceService
+```
+
+---
+
+# Variáveis
+
+Sempre utilizar nomes claros.
+
+Ruim
+
+```
+a
+
+b
+
+x
+
+aux
+```
+
+Bom
+
+```
+workedMinutes
+
+dailyWorkload
+
+hourBalance
+
+predictedExit
+```
+
+---
+
+# Métodos
+
+Métodos devem representar ações.
+
+Exemplo
+
+```
+calculateWorkedHours()
+
+calculateHourBalance()
+
+findUser()
+
+registerEntry()
+
+registerExit()
+```
+
+Evitar métodos com múltiplas responsabilidades.
+
+---
+
+# Services
+
+Toda regra de negócio deve estar na Service.
+
+Nunca implementar regra de negócio em:
+
+Controller
+
+Repository
+
+DTO
+
+Entity
+
+---
+
+# Controllers
+
+Controllers apenas:
+
+Recebem requisições.
+
+Validam DTO.
+
+Chamam Services.
+
+Retornam ResponseEntity.
+
+Nada além disso.
+
+---
+
+# Repository
+
+Repository apenas acessa banco.
+
+Nunca implementar regra de negócio.
+
+---
+
+# DTO
+
+Nunca retornar Entities diretamente.
+
+Sempre utilizar DTO.
+
+Sempre validar entrada.
+
+---
+
+# Banco
+
+Toda alteração deve possuir migration Flyway.
+
+Nunca alterar banco manualmente.
+
+Sempre criar nova migration.
+
+---
+
+# Exceptions
+
+Criar exceções específicas.
+
+Nunca utilizar Exception genérica.
+
+Sempre retornar mensagens claras.
+
+---
+
+# Comentários
+
+Comentários apenas quando necessários.
+
+Código bem escrito elimina comentários.
+
+Nunca comentar código óbvio.
+
+---
+
+# Duplicação
+
+Nunca duplicar código.
+
+Sempre reutilizar.
+
+Sempre extrair métodos comuns.
+
+---
+
+# Constantes
+
+Nunca utilizar números mágicos.
+
+Exemplo
+
+Ruim
+
+```
+workedMinutes - 530
+```
+
+Bom
+
+```
+private static final int DAILY_WORKLOAD = 530;
+```
+
+---
+
+# Java
+
+Utilizar:
+
+Records para DTO.
+
+Optional quando fizer sentido.
+
+Streams apenas quando melhorarem a leitura.
+
+Preferir código simples.
+
+---
+
+# Frontend
+
+Separar:
+
+API
+
+Components
+
+Pages
+
+Utils
+
+Nunca misturar HTML com lógica de negócio.
+
+---
+
+# CSS
+
+Evitar CSS duplicado.
+
+Utilizar variáveis CSS.
+
+Responsividade obrigatória.
+
+---
+
+# JavaScript
+
+Evitar funções enormes.
+
+Separar responsabilidades.
+
+Criar funções reutilizáveis.
+
+Nunca acessar API diretamente em vários lugares.
+
+Criar camada de Service.
+
+---
+
+# Git
+
+Commits pequenos.
+
+Commits descritivos.
+
+Exemplos
+
+```
+feat: add hour balance calculation
+
+fix: correct worked hours calculation
+
+refactor: simplify dashboard service
+
+docs: update project overview
+```
+
+---
+
+# Qualidade
+
+Antes de gerar código verificar:
+
+- Existe código semelhante?
+
+- Posso reutilizar?
+
+- Estou seguindo SOLID?
+
+- Estou duplicando código?
+
+- O código é legível?
+
+- Está desacoplado?
+
+- Está testável?
+
+---
+
+# Regra Principal
+
+Sempre gerar código como se estivesse sendo desenvolvido por uma equipe sênior.
+
+Priorizar:
+
+Legibilidade
+
+Escalabilidade
+
+Baixo acoplamento
+
+Alta coesão
+
+Facilidade de manutenção
+
+Nunca escolher uma solução apenas porque é menor.
+
+Escolher sempre a solução mais limpa.

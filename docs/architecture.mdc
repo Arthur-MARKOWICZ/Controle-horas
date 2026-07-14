@@ -1,0 +1,188 @@
+---
+description: Arquitetura geral do projeto e responsabilidades de cada camada.
+alwaysApply: true
+---
+
+# Architecture
+
+## Objetivo
+
+Este projeto deve seguir uma arquitetura em camadas (Layered Architecture), com separação clara entre Front-end e Back-end.
+
+A prioridade é:
+- Manutenibilidade
+- Legibilidade
+- Escalabilidade
+- Baixo acoplamento
+- Alta coesão
+
+---
+
+# Estrutura do Repositório
+
+/
+├── backend/
+├── frontend/
+├── docs/
+└── .cursor/
+
+Cada diretório possui responsabilidade única.
+
+Nunca misturar arquivos do Front-end com o Back-end.
+
+---
+
+# Arquitetura Backend
+
+Client
+
+↓
+
+Controller
+
+↓
+
+Service
+
+↓
+
+Repository
+
+↓
+
+Database
+
+### Controller
+
+Responsável apenas por:
+
+- Receber requisições
+- Validar entrada
+- Chamar Services
+- Retornar respostas HTTP
+
+Nunca implementar regras de negócio.
+
+---
+
+### Service
+
+Toda regra de negócio deve existir aqui.
+
+Exemplos:
+
+- cálculo da saída prevista
+- cálculo das horas trabalhadas
+- cálculo do banco de horas
+- validações
+
+---
+
+### Repository
+
+Responsável exclusivamente pelo acesso ao banco.
+
+Nunca conter lógica de negócio.
+
+---
+
+### Database
+
+Persistência utilizando PostgreSQL.
+
+Todas as alterações estruturais devem ser feitas através do Flyway.
+
+---
+
+# Arquitetura Front-end
+
+Pages
+
+↓
+
+Components
+
+↓
+
+Services
+
+↓
+
+API
+
+A interface nunca deve implementar regras de negócio.
+
+Todos os cálculos oficiais devem ser realizados pela API.
+
+---
+
+# Comunicação
+
+Frontend
+
+↓
+
+REST API
+
+↓
+
+Backend
+
+↓
+
+PostgreSQL
+
+Toda comunicação deve ocorrer via JSON.
+
+---
+
+# Fluxo de Registro
+
+Usuário
+
+↓
+
+Registrar Entrada
+
+↓
+
+API
+
+↓
+
+Banco
+
+↓
+
+Dashboard Atualizado
+
+↓
+
+Saída Prevista Calculada
+
+O Front-end apenas exibe as informações.
+
+---
+
+# Princípios
+
+Sempre seguir:
+
+- Separation of Concerns
+- Single Responsibility
+- Clean Architecture
+- SOLID
+
+---
+
+# Futuras Evoluções
+
+A arquitetura deve permitir:
+
+- Aplicativo mobile
+- PWA
+- Dashboard administrativo
+- Múltiplos usuários
+- Integração com outros sistemas
+
+Sem necessidade de reescrever o núcleo da aplicação.
