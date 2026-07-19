@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ThemeProvider } from '../../contexts/ThemeContext'
 import DashboardPage from './DashboardPage'
 
 const useAuthMock = vi.fn()
@@ -17,9 +18,24 @@ vi.mock('../../hooks/useDashboard', () => ({
 function renderDashboard() {
   return render(
     <MemoryRouter>
-      <DashboardPage />
+      <ThemeProvider>
+        <DashboardPage />
+      </ThemeProvider>
     </MemoryRouter>,
   )
+}
+
+const dashboardActions = {
+  isLoading: false,
+  isSubmitting: false,
+  error: '',
+  message: '',
+  registerEntry: vi.fn(),
+  registerPause: vi.fn(),
+  registerLunch: vi.fn(),
+  registerResume: vi.fn(),
+  registerExit: vi.fn(),
+  saveDailyWorkload: vi.fn(),
 }
 
 describe('DashboardPage', () => {
@@ -27,29 +43,29 @@ describe('DashboardPage', () => {
     useAuthMock.mockReturnValue({
       user: { name: 'Arthur' },
       logout: vi.fn(),
+      canManageUsers: false,
     })
   })
 
   it('shows expected exit when there is an entry', async () => {
     useDashboardMock.mockReturnValue({
+      ...dashboardActions,
       dashboard: {
         date: '2026-07-14',
         dailyWorkloadMinutes: 530,
         standardEntryTime: '08:30:00',
         standardExitTime: '17:20:00',
-        nextAction: 'EXIT',
+        lunchEnabled: true,
+        lunchDurationMinutes: 60,
+        workDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'],
+        nextAction: 'PAUSE_OR_EXIT',
         expectedExitAt: '2026-07-14T20:20:00Z',
         workedMinutesToday: 120,
+        pausedMinutesToday: 0,
         balanceMinutesToday: -410,
         hourBankMinutes: 0,
-        workLogs: [{ id: '1', entryAt: '2026-07-14T11:30:00Z', exitAt: null }],
+        workLogs: [{ id: '1', entryAt: '2026-07-14T11:30:00Z', exitAt: null, closeReason: null }],
       },
-      isLoading: false,
-      isSubmitting: false,
-      error: '',
-      message: '',
-      register: vi.fn(),
-      saveDailyWorkload: vi.fn(),
     })
 
     renderDashboard()
@@ -57,28 +73,30 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Saída prevista')).toBeInTheDocument()
     expect(screen.getByText('17:20')).toBeInTheDocument()
     expect(screen.getByText('2h00')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pausar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Almoço' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Registrar saída' })).toBeInTheDocument()
   })
 
   it('shows zero and empty values when there are no records', async () => {
     useDashboardMock.mockReturnValue({
+      ...dashboardActions,
       dashboard: {
         date: '2026-07-14',
         dailyWorkloadMinutes: 530,
         standardEntryTime: '08:30:00',
         standardExitTime: '17:20:00',
+        lunchEnabled: false,
+        lunchDurationMinutes: 60,
+        workDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'],
         nextAction: 'ENTRY',
         expectedExitAt: null,
         workedMinutesToday: 0,
+        pausedMinutesToday: 0,
         balanceMinutesToday: -530,
         hourBankMinutes: 0,
         workLogs: [],
       },
-      isLoading: false,
-      isSubmitting: false,
-      error: '',
-      message: '',
-      register: vi.fn(),
-      saveDailyWorkload: vi.fn(),
     })
 
     renderDashboard()
@@ -94,13 +112,9 @@ describe('DashboardPage', () => {
 
   it('shows loading state', () => {
     useDashboardMock.mockReturnValue({
+      ...dashboardActions,
       dashboard: null,
       isLoading: true,
-      isSubmitting: false,
-      error: '',
-      message: '',
-      register: vi.fn(),
-      saveDailyWorkload: vi.fn(),
     })
 
     renderDashboard()

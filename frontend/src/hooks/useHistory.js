@@ -8,7 +8,9 @@ export function useHistory(initialRange = getCurrentMonthRange()) {
   const [startDate, setStartDate] = useState(initialRange.startDate)
   const [endDate, setEndDate] = useState(initialRange.endDate)
   const [isLoading, setIsLoading] = useState(true)
+  const [isExporting, setIsExporting] = useState(false)
   const [error, setError] = useState('')
+  const [exportError, setExportError] = useState('')
 
   const loadHistory = useCallback(async (nextStartDate, nextEndDate) => {
     setIsLoading(true)
@@ -33,12 +35,33 @@ export function useHistory(initialRange = getCurrentMonthRange()) {
     loadHistory(initialRange.startDate, initialRange.endDate)
   }, [initialRange.endDate, initialRange.startDate, loadHistory])
 
+  const exportHistory = useCallback(async (format) => {
+    setIsExporting(true)
+    setExportError('')
+    try {
+      const blob = format === 'pdf'
+        ? await historyService.exportPdf(startDate, endDate)
+        : await historyService.exportExcel(startDate, endDate)
+      const filename = format === 'pdf' ? 'historico-horas.pdf' : 'historico-horas.xlsx'
+      historyService.downloadHistoryFile(blob, filename)
+      return true
+    } catch (requestError) {
+      setExportError(getErrorMessage(requestError, 'Unable to export history'))
+      return false
+    } finally {
+      setIsExporting(false)
+    }
+  }, [endDate, startDate])
+
   return {
     history,
     startDate,
     endDate,
     isLoading,
+    isExporting,
     error,
+    exportError,
     loadHistory,
+    exportHistory,
   }
 }

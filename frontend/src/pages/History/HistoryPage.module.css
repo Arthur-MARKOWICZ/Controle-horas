@@ -35,6 +35,13 @@
   align-items: end;
 }
 
+.filterActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: end;
+}
+
 .filterForm label {
   display: block;
   font-weight: 600;
@@ -47,17 +54,24 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: 0.65rem;
-  background: white;
+  background: var(--color-surface);
 }
 
-.filterForm button {
+.filterForm button,
+.secondaryButton {
   border: 1px solid var(--color-primary);
   border-radius: var(--radius-sm);
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   padding: 0.65rem 1rem;
   cursor: pointer;
   font-weight: 600;
+  min-height: 2.75rem;
+}
+
+.secondaryButton {
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 button:disabled,
@@ -141,18 +155,23 @@ th {
 }
 
 .open {
-  background: #fff3cd;
-  color: #725c00;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
 }
 
 .completed {
-  background: #dff4e8;
-  color: #145c3a;
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 @media (max-width: 42rem) {
   .filterForm,
-  .summaryGrid {
+  .summaryGrid,
+  .filterActions {
     grid-template-columns: 1fr;
+  }
+
+  .filterActions {
+    display: grid;
   }
 }

@@ -1,4 +1,5 @@
-:root {
+:root,
+[data-theme="light"] {
   --color-bg: #eef3f1;
   --color-bg-accent: #d7e6df;
   --color-surface: #f9fcfb;
@@ -6,9 +7,16 @@
   --color-text-muted: #4d635b;
   --color-primary: #1f6f5b;
   --color-primary-hover: #185746;
+  --color-on-primary: #ffffff;
   --color-border: #c5d6cf;
   --color-danger: #b42318;
   --color-danger-bg: #fef3f2;
+  --color-warning-bg: #fff3cd;
+  --color-warning-text: #725c00;
+  --color-success-bg: #dff4e8;
+  --color-success-text: #145c3a;
+  --gradient-spot-1: rgba(31, 111, 91, 0.12);
+  --gradient-spot-2: rgba(21, 36, 31, 0.08);
   --font-display: "Sora", sans-serif;
   --font-body: "Figtree", sans-serif;
   --space-xs: 0.25rem;
@@ -20,6 +28,29 @@
   --radius-sm: 0.375rem;
   --radius-md: 0.75rem;
   --shadow-soft: 0 12px 40px rgba(21, 36, 31, 0.08);
+  --bp-sm: 42rem;
+  --bp-md: 56rem;
+}
+
+[data-theme="dark"] {
+  --color-bg: #0f1a17;
+  --color-bg-accent: #15241f;
+  --color-surface: #1b2c26;
+  --color-text: #e8f2ee;
+  --color-text-muted: #9cb5ab;
+  --color-primary: #3f9d84;
+  --color-primary-hover: #58b89d;
+  --color-on-primary: #0f1a17;
+  --color-border: #2f4a40;
+  --color-danger: #f97066;
+  --color-danger-bg: #3b1c1a;
+  --color-warning-bg: #3d3420;
+  --color-warning-text: #f5d68a;
+  --color-success-bg: #1d3b30;
+  --color-success-text: #9ee0bf;
+  --gradient-spot-1: rgba(63, 157, 132, 0.18);
+  --gradient-spot-2: rgba(0, 0, 0, 0.35);
+  --shadow-soft: 0 12px 40px rgba(0, 0, 0, 0.35);
 }
 
 *,
@@ -39,15 +70,17 @@ body {
   font-family: var(--font-body);
   color: var(--color-text);
   background:
-    radial-gradient(circle at top left, rgba(31, 111, 91, 0.12), transparent 42%),
-    radial-gradient(circle at bottom right, rgba(21, 36, 31, 0.08), transparent 38%),
+    radial-gradient(circle at top left, var(--gradient-spot-1), transparent 42%),
+    radial-gradient(circle at bottom right, var(--gradient-spot-2), transparent 38%),
     linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-accent) 100%);
   -webkit-font-smoothing: antialiased;
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
+  color: inherit;
 }
 
 a {

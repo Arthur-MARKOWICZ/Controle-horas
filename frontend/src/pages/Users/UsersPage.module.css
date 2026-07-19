@@ -1,0 +1,161 @@
+.page {
+  width: 100%;
+}
+
+.header h1 {
+  margin: 0;
+  font-family: var(--font-display);
+}
+
+.description,
+.fieldError {
+  color: var(--color-text-muted);
+  margin: var(--space-sm) 0 0;
+}
+
+.fieldError,
+.error {
+  color: var(--color-danger);
+}
+
+.success {
+  color: var(--color-primary);
+}
+
+.card,
+.tableCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
+.card h2,
+.tableCard h2 {
+  margin: 0 0 var(--space-md);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-weight: 600;
+}
+
+.form input,
+.form select,
+.tableWrapper select {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.form button,
+.secondaryButton,
+.actions button {
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 2.75rem;
+}
+
+.checkboxLabel {
+  flex-direction: row !important;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.checkboxLabel input {
+  width: auto;
+}
+
+.secondaryButton {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: end;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.hierarchy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.hierarchyGroup {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  background: var(--color-surface);
+}
+
+.hierarchyHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.hierarchyName {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.hierarchyMeta,
+.emptyTeam {
+  margin: var(--space-xs) 0 0;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 42rem) {
+  .form {
+    grid-template-columns: 1fr;
+  }
+
+  .hierarchyHeader {
+    display: grid;
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

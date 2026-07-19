@@ -4,6 +4,7 @@ import com.controle_horas.Controle_horas.dto.AuthResponse;
 import com.controle_horas.Controle_horas.dto.LoginRequest;
 import com.controle_horas.Controle_horas.dto.RegisterRequest;
 import com.controle_horas.Controle_horas.entity.User;
+import com.controle_horas.Controle_horas.entity.UserRole;
 import com.controle_horas.Controle_horas.exception.EmailAlreadyRegisteredException;
 import com.controle_horas.Controle_horas.exception.InvalidCredentialsException;
 import com.controle_horas.Controle_horas.repository.UserRepository;
@@ -40,6 +41,10 @@ public class AuthService {
         user.setName(request.name().trim());
         user.setEmail(normalizedEmail);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
+        // Company bootstrap: first account is a root admin (no creator) with full access
+        // to users they later create under their organization.
+        user.setRole(UserRole.ADMIN);
+        user.setCreatedBy(null);
 
         User savedUser = userRepository.save(user);
         return buildAuthResponse(savedUser);
@@ -60,8 +65,9 @@ public class AuthService {
     }
 
     private AuthResponse buildAuthResponse(User user) {
-        String token = jwtService.generateToken(user.getId(), user.getEmail());
-        return new AuthResponse(token, user.getId(), user.getName(), user.getEmail());
+        String role = user.getRole().name();
+        String token = jwtService.generateToken(user.getId(), user.getEmail(), role);
+        return new AuthResponse(token, user.getId(), user.getName(), user.getEmail(), role);
     }
 
     private String normalizeEmail(String email) {

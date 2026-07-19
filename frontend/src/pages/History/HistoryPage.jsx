@@ -10,7 +10,17 @@ import {
 import styles from './HistoryPage.module.css'
 
 function HistoryPage() {
-  const { history, startDate, endDate, isLoading, error, loadHistory } = useHistory()
+  const {
+    history,
+    startDate,
+    endDate,
+    isLoading,
+    isExporting,
+    error,
+    exportError,
+    loadHistory,
+    exportHistory,
+  } = useHistory()
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: { startDate, endDate },
   })
@@ -34,7 +44,7 @@ function HistoryPage() {
               <input
                 id="startDate"
                 type="date"
-                disabled={isLoading}
+                disabled={isLoading || isExporting}
                 {...register('startDate', { required: 'Informe a data inicial.' })}
               />
             </label>
@@ -43,20 +53,40 @@ function HistoryPage() {
               <input
                 id="endDate"
                 type="date"
-                disabled={isLoading}
+                disabled={isLoading || isExporting}
                 {...register('endDate', { required: 'Informe a data final.' })}
               />
             </label>
-            <button type="submit" disabled={isLoading}>
-              {isLoading ? 'Carregando...' : 'Filtrar'}
-            </button>
+            <div className={styles.filterActions}>
+              <button type="submit" disabled={isLoading || isExporting}>
+                {isLoading ? 'Carregando...' : 'Filtrar'}
+              </button>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                disabled={isLoading || isExporting || !history}
+                onClick={() => exportHistory('xlsx')}
+              >
+                {isExporting ? 'Exportando...' : 'Exportar Excel'}
+              </button>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                disabled={isLoading || isExporting || !history}
+                onClick={() => exportHistory('pdf')}
+              >
+                {isExporting ? 'Exportando...' : 'Exportar PDF'}
+              </button>
+            </div>
           </form>
           {(errors.startDate || errors.endDate) && (
             <p className={styles.fieldError}>{errors.startDate?.message || errors.endDate?.message}</p>
           )}
         </section>
 
-        {error && <p className={styles.error} role="alert">{error}</p>}
+        {(error || exportError) && (
+          <p className={styles.error} role="alert">{error || exportError}</p>
+        )}
 
         {isLoading && !history && (
           <p className={styles.loading}>Carregando histórico...</p>
@@ -98,6 +128,7 @@ function HistoryPage() {
                         <th scope="col">Primeira entrada</th>
                         <th scope="col">Última saída</th>
                         <th scope="col">Horas trabalhadas</th>
+                        <th scope="col">Pausa</th>
                         <th scope="col">Saldo</th>
                         <th scope="col">Status</th>
                       </tr>
@@ -109,6 +140,7 @@ function HistoryPage() {
                           <td>{formatInstantTime(day.firstEntryAt)}</td>
                           <td>{formatInstantTime(day.lastExitAt)}</td>
                           <td>{formatWorkload(day.workedMinutes)}</td>
+                          <td>{formatWorkload(day.pausedMinutes ?? 0)}</td>
                           <td>{formatSignedDuration(day.balanceMinutes)}</td>
                           <td>
                             <span className={day.isComplete ? styles.completed : styles.open}>

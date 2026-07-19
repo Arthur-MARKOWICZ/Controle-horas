@@ -25,14 +25,11 @@ export function useDashboard() {
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
 
-  const register = useCallback(async () => {
+  const runAction = useCallback(async (action) => {
     setIsSubmitting(true)
     setError('')
     setMessage('')
     try {
-      const action = dashboard?.nextAction === 'EXIT'
-        ? dashboardService.registerExit
-        : dashboardService.registerEntry
       const response = await action()
       if (!response.success || !response.data) throw new Error(response.message || 'Unable to register time')
       setDashboard(response.data)
@@ -42,14 +39,32 @@ export function useDashboard() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [dashboard?.nextAction])
+  }, [])
 
-  const saveDailyWorkload = useCallback(async ({ standardEntryTime, standardExitTime }) => {
+  const registerEntry = useCallback(() => runAction(dashboardService.registerEntry), [runAction])
+  const registerPause = useCallback(() => runAction(dashboardService.registerPause), [runAction])
+  const registerLunch = useCallback(() => runAction(dashboardService.registerLunch), [runAction])
+  const registerResume = useCallback(() => runAction(dashboardService.registerResume), [runAction])
+  const registerExit = useCallback(() => runAction(dashboardService.registerExit), [runAction])
+
+  const saveDailyWorkload = useCallback(async ({
+    standardEntryTime,
+    standardExitTime,
+    lunchEnabled,
+    lunchDurationMinutes,
+    workDays,
+  }) => {
     setIsSubmitting(true)
     setError('')
     setMessage('')
     try {
-      const response = await dashboardService.updateDailyWorkload(standardEntryTime, standardExitTime)
+      const response = await dashboardService.updateDailyWorkload({
+        standardEntryTime,
+        standardExitTime,
+        lunchEnabled,
+        lunchDurationMinutes: Number(lunchDurationMinutes),
+        workDays,
+      })
       if (!response.success || !response.data) throw new Error(response.message || 'Unable to save daily workload')
       const dashboardResponse = await dashboardService.getTodayDashboard()
       if (!dashboardResponse.success || !dashboardResponse.data) {
@@ -66,5 +81,18 @@ export function useDashboard() {
     }
   }, [])
 
-  return { dashboard, isLoading, isSubmitting, error, message, loadDashboard, register, saveDailyWorkload }
+  return {
+    dashboard,
+    isLoading,
+    isSubmitting,
+    error,
+    message,
+    loadDashboard,
+    registerEntry,
+    registerPause,
+    registerLunch,
+    registerResume,
+    registerExit,
+    saveDailyWorkload,
+  }
 }

@@ -11,6 +11,7 @@ import com.controle_horas.Controle_horas.dto.AuthResponse;
 import com.controle_horas.Controle_horas.dto.LoginRequest;
 import com.controle_horas.Controle_horas.dto.RegisterRequest;
 import com.controle_horas.Controle_horas.entity.User;
+import com.controle_horas.Controle_horas.entity.UserRole;
 import com.controle_horas.Controle_horas.exception.EmailAlreadyRegisteredException;
 import com.controle_horas.Controle_horas.exception.InvalidCredentialsException;
 import com.controle_horas.Controle_horas.repository.UserRepository;
@@ -58,7 +59,7 @@ class AuthServiceTest {
             user.setId(userId);
             return user;
         });
-        when(jwtService.generateToken(userId, "arthur@email.com")).thenReturn("jwt-token");
+        when(jwtService.generateToken(userId, "arthur@email.com", "ADMIN")).thenReturn("jwt-token");
 
         AuthResponse response = authService.register(request);
 
@@ -66,10 +67,13 @@ class AuthServiceTest {
         assertThat(response.userId()).isEqualTo(userId);
         assertThat(response.name()).isEqualTo("Arthur");
         assertThat(response.email()).isEqualTo("arthur@email.com");
+        assertThat(response.role()).isEqualTo("ADMIN");
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(userCaptor.capture());
         assertThat(userCaptor.getValue().getPasswordHash()).isEqualTo("hashed-password");
+        assertThat(userCaptor.getValue().getRole()).isEqualTo(UserRole.ADMIN);
+        assertThat(userCaptor.getValue().getCreatedBy()).isNull();
     }
 
     @Test
@@ -92,12 +96,13 @@ class AuthServiceTest {
 
         when(userRepository.findByEmail("arthur@email.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("password123", "hashed-password")).thenReturn(true);
-        when(jwtService.generateToken(userId, "arthur@email.com")).thenReturn("jwt-token");
+        when(jwtService.generateToken(userId, "arthur@email.com", "USER")).thenReturn("jwt-token");
 
         AuthResponse response = authService.login(request);
 
         assertThat(response.token()).isEqualTo("jwt-token");
         assertThat(response.email()).isEqualTo("arthur@email.com");
+        assertThat(response.role()).isEqualTo("USER");
     }
 
     @Test
@@ -130,6 +135,7 @@ class AuthServiceTest {
         user.setName("Arthur");
         user.setEmail("arthur@email.com");
         user.setPasswordHash("hashed-password");
+        user.setRole(UserRole.USER);
         return user;
     }
 }

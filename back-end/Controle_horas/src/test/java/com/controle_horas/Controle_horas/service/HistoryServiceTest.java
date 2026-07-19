@@ -7,11 +7,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.controle_horas.Controle_horas.dto.HistoryResponse;
+import com.controle_horas.Controle_horas.entity.CloseReason;
 import com.controle_horas.Controle_horas.entity.User;
 import com.controle_horas.Controle_horas.entity.WorkLog;
 import com.controle_horas.Controle_horas.repository.WorkLogRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,11 +34,14 @@ class HistoryServiceTest {
 
     @BeforeEach
     void setUp() {
-        historyService = new HistoryService(workLogRepository, userService, new WorkTimeCalculationService());
+        Clock clock = Clock.fixed(Instant.parse("2026-07-14T12:00:00Z"), ZoneOffset.UTC);
+        historyService = new HistoryService(
+                workLogRepository, userService, new WorkTimeCalculationService(), clock);
         user = new User();
         user.setId(UUID.randomUUID());
         user.setEmail("arthur@example.com");
         user.setDailyWorkloadMinutes(530);
+        user.setCreatedAt(Instant.parse("2026-07-13T03:00:00Z"));
     }
 
     @Test
@@ -72,10 +78,29 @@ class HistoryServiceTest {
         assertThat(response.hourBankMinutes()).isEqualTo(40);
     }
 
+    @Test
+    void getHistory_shouldIncludeSyntheticAbsenceForPastWorkDay() {
+        when(userService.findUser(user.getEmail())).thenReturn(user);
+        when(workLogRepository.findByUserIdAndEntryAtGreaterThanEqualAndEntryAtLessThanOrderByEntryAtAsc(
+                        eq(user.getId()), any(), any()))
+                .thenReturn(List.of());
+        when(workLogRepository.findByUserIdOrderByEntryAtAsc(user.getId())).thenReturn(List.of());
+
+        HistoryResponse response = historyService.getHistory(
+                user.getEmail(), LocalDate.of(2026, 7, 13), LocalDate.of(2026, 7, 14));
+
+        assertThat(response.days()).hasSize(1);
+        assertThat(response.days().get(0).date()).isEqualTo(LocalDate.of(2026, 7, 13));
+        assertThat(response.days().get(0).workedMinutes()).isZero();
+        assertThat(response.days().get(0).balanceMinutes()).isEqualTo(-530);
+        assertThat(response.days().get(0).isComplete()).isTrue();
+        assertThat(response.hourBankMinutes()).isEqualTo(-530);
+    }
+
     private WorkLog closedLog(String entryAt, String exitAt) {
         WorkLog workLog = new WorkLog();
         workLog.setEntryAt(Instant.parse(entryAt));
-        workLog.setExitAt(Instant.parse(exitAt));
+        workLog.close(Instant.parse(exitAt), CloseReason.EXIT);
         return workLog;
     }
 

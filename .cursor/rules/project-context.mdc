@@ -212,7 +212,7 @@ Versão 1
 
 ✔ Banco de Horas
 
-- pode colocar pause dentro do dia
+✔ Pause dentro do dia
 
 Versão 2
 
@@ -221,8 +221,8 @@ Versão 2
 - Tema escuro
 - Responsividade
 - Controle de hora de almoço
-- Classificação de Usuarios(Admin , gestores e usuario comun)
-- Download de .csv e .xslx para migração de dados de outro sistema
+✔ Classificação de Usuarios(Admin , gestores e usuario comun)
+✔ Download de .csv e .xslx para migração de dados de outro sistema
 
 Versão 3
 
@@ -230,7 +230,24 @@ Versão 3
 - Notificações
 - Calendário
 - Estatísticas
+Versão 3
 
+- PWA
+- Notificações
+- Calendário
+- Estatísticas
+- pode fechar o banco
+- pode gerar batida (caso esqueca )
+    - pode editar a parte de horario de entra e saida (para admin)
+
+versao 4
+
+- criar estera de ci/cd
+- deploy automatico
+- prepara o deploy
+    - front : cloudflare
+    - back: render
+    - banco: neon postgres
 ---
 
 # Estrutura Esperada

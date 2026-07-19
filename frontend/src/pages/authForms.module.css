@@ -28,12 +28,12 @@
   padding: 0.75rem 0.875rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--color-surface);
   color: var(--color-text);
 }
 
 .input:focus {
-  outline: 2px solid rgba(31, 111, 91, 0.35);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
   outline-offset: 1px;
   border-color: var(--color-primary);
 }
@@ -62,10 +62,11 @@
   border: none;
   border-radius: var(--radius-sm);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   font-weight: 600;
   padding: 0.85rem 1rem;
   cursor: pointer;
+  min-height: 2.75rem;
 }
 
 .submit:hover:not(:disabled) {
@@ -82,4 +83,11 @@
   color: var(--color-text-muted);
   font-size: 0.9rem;
   text-align: center;
+}
+
+.hint {
+  margin: 0 0 var(--space-md);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }

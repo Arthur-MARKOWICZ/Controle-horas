@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import MainLayout from '../../layouts/MainLayout'
 import { useDashboard } from '../../hooks/useDashboard'
@@ -9,11 +10,42 @@ import {
   formatTimeInput,
   formatWorkload,
 } from '../../utils/formatTime'
+import { normalizeWorkDays } from '../../utils/workDays'
 import styles from './DashboardPage.module.css'
 
+function resolveStatusLabel(workLog) {
+  if (!workLog.exitAt) {
+    return 'Em andamento'
+  }
+  if (workLog.closeReason === 'LUNCH') {
+    return 'Almoço'
+  }
+  if (workLog.closeReason === 'PAUSE') {
+    return 'Pausa'
+  }
+  return 'Saída'
+}
+
 function DashboardPage() {
-  const { dashboard, isLoading, isSubmitting, error, message, register, saveDailyWorkload } = useDashboard()
-  const { register: registerField, handleSubmit, reset, formState: { errors } } = useForm()
+  const {
+    dashboard,
+    isLoading,
+    isSubmitting,
+    error,
+    message,
+    registerEntry,
+    registerPause,
+    registerLunch,
+    registerResume,
+    registerExit,
+    saveDailyWorkload,
+  } = useDashboard()
+  const {
+    register: registerField,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm()
 
   useEffect(() => {
     if (dashboard) {
@@ -24,8 +56,14 @@ function DashboardPage() {
     }
   }, [dashboard, reset])
 
-  const onSubmitWorkload = async ({ standardEntryTime, standardExitTime }) => {
-    await saveDailyWorkload({ standardEntryTime, standardExitTime })
+  const onSubmitWorkload = async (values) => {
+    await saveDailyWorkload({
+      standardEntryTime: values.standardEntryTime,
+      standardExitTime: values.standardExitTime,
+      lunchEnabled: Boolean(dashboard.lunchEnabled),
+      lunchDurationMinutes: Number(dashboard.lunchDurationMinutes ?? 60),
+      workDays: normalizeWorkDays(dashboard.workDays),
+    })
   }
 
   if (isLoading) {
@@ -46,7 +84,8 @@ function DashboardPage() {
     )
   }
 
-  const isExitAction = dashboard.nextAction === 'EXIT'
+  const nextAction = dashboard.nextAction
+  const showLunchAction = dashboard.lunchEnabled === true
 
   return (
     <MainLayout>
@@ -65,6 +104,10 @@ function DashboardPage() {
             <p className={styles.summaryValue}>{formatWorkload(dashboard.workedMinutesToday ?? 0)}</p>
           </article>
           <article className={styles.summaryCard}>
+            <h2>Tempo em pausa</h2>
+            <p className={styles.summaryValue}>{formatWorkload(dashboard.pausedMinutesToday ?? 0)}</p>
+          </article>
+          <article className={styles.summaryCard}>
             <h2>Saldo do dia</h2>
             <p className={styles.summaryValue}>{formatSignedDuration(dashboard.balanceMinutesToday ?? 0)}</p>
           </article>
@@ -77,23 +120,53 @@ function DashboardPage() {
         <section className={styles.grid} aria-label="Registro de ponto">
           <article className={styles.card}>
             <h2>Registro de ponto</h2>
-            <p className={styles.description}>
-              {isExitAction ? 'Sua entrada está em andamento.' : 'Você não possui uma jornada aberta.'}
-            </p>
-            <button className={styles.actionButton} type="button" onClick={register} disabled={isSubmitting}>
-              {isSubmitting ? 'Registrando...' : isExitAction ? 'Registrar saída' : 'Registrar entrada'}
-            </button>
+            {nextAction === 'ENTRY' && (
+              <>
+                <p className={styles.description}>Você não possui uma jornada aberta.</p>
+                <button className={styles.actionButton} type="button" onClick={registerEntry} disabled={isSubmitting}>
+                  {isSubmitting ? 'Registrando...' : 'Registrar entrada'}
+                </button>
+              </>
+            )}
+            {nextAction === 'PAUSE_OR_EXIT' && (
+              <>
+                <p className={styles.description}>Sua entrada está em andamento.</p>
+                <div className={styles.actionGroup}>
+                  <button className={styles.secondaryAction} type="button" onClick={registerPause} disabled={isSubmitting}>
+                    Pausar
+                  </button>
+                  {showLunchAction && (
+                    <button className={styles.secondaryAction} type="button" onClick={registerLunch} disabled={isSubmitting}>
+                      Almoço
+                    </button>
+                  )}
+                  <button className={styles.actionButton} type="button" onClick={registerExit} disabled={isSubmitting}>
+                    Registrar saída
+                  </button>
+                </div>
+              </>
+            )}
+            {nextAction === 'RESUME' && (
+              <>
+                <p className={styles.description}>Você está em pausa ou almoço.</p>
+                <button className={styles.actionButton} type="button" onClick={registerResume} disabled={isSubmitting}>
+                  {isSubmitting ? 'Registrando...' : 'Retomar'}
+                </button>
+              </>
+            )}
           </article>
 
           <article className={styles.card}>
-            <h2>Carga diária</h2>
+            <h2>Horário padrão</h2>
             <p className={styles.description}>
-              Defina sua entrada e saída padrão. Atual: {formatTimeInput(dashboard.standardEntryTime)} às {formatTimeInput(dashboard.standardExitTime)} ({formatWorkload(dashboard.dailyWorkloadMinutes)}).
+              Ajuste entrada e saída. Carga atual: {formatWorkload(dashboard.dailyWorkloadMinutes)}.
+              {' '}
+              <Link className={styles.settingsLink} to="/settings/schedule">Editar jornada completa</Link>
             </p>
             <form className={styles.workloadForm} onSubmit={handleSubmit(onSubmitWorkload)}>
               <div className={styles.timeFields}>
                 <label htmlFor="standardEntryTime">
-                  Entrada padrão
+                  Entrada
                   <input
                     id="standardEntryTime"
                     type="time"
@@ -102,7 +175,7 @@ function DashboardPage() {
                   />
                 </label>
                 <label htmlFor="standardExitTime">
-                  Saída padrão
+                  Saída
                   <input
                     id="standardExitTime"
                     type="time"
@@ -113,7 +186,9 @@ function DashboardPage() {
               </div>
               <button type="submit" disabled={isSubmitting}>Salvar</button>
               {(errors.standardEntryTime || errors.standardExitTime) && (
-                <p className={styles.fieldError}>{errors.standardEntryTime?.message || errors.standardExitTime?.message}</p>
+                <p className={styles.fieldError}>
+                  {errors.standardEntryTime?.message || errors.standardExitTime?.message}
+                </p>
               )}
             </form>
           </article>
@@ -149,7 +224,7 @@ function DashboardPage() {
                       <td>{workLog.exitAt ? formatInstantTime(workLog.exitAt) : 'Em andamento'}</td>
                       <td>
                         <span className={workLog.exitAt ? styles.completed : styles.open}>
-                          {workLog.exitAt ? 'Concluído' : 'Em andamento'}
+                          {resolveStatusLabel(workLog)}
                         </span>
                       </td>
                     </tr>

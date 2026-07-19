@@ -98,9 +98,20 @@ O projeto deve demonstrar conhecimento em:
 
 A aplicação calcula banco de horas.
 
-Existe apenas um usuário por enquanto.
+O Usuario deve cadastrar e editar a sua carga horaria e os dias de trabalho.
 
-O Usuario deve cadastrar e editar a sua carga horaria
+Dias de trabalho (default: segunda a sexta) definem quando a carga diária é esperada.
+
+```
+Carga efetiva do dia
+
+=
+
+Carga diária   se o dia for de trabalho
+0              se o dia NÃO for de trabalho
+```
+
+Em dia não útil (ex.: sábado), qualquer minuto trabalhado gera saldo positivo.
 
 A saída prevista é calculada automaticamente.
 
@@ -113,10 +124,14 @@ Entrada
 
 +
 
-Carga diária
+Carga efetiva do dia
+
++
+
+Pausas/almoço
 ```
 
-Exemplo
+Exemplo (dia útil)
 
 Entrada
 
@@ -136,11 +151,7 @@ Horas Trabalhadas
 
 =
 
-Saída
-
-- 
-
-Entrada
+Soma dos intervalos fechados do dia
 
 Saldo
 
@@ -148,15 +159,24 @@ Saldo
 
 Horas Trabalhadas
 
-- 
+-
 
-Carga diária
+Carga efetiva do dia
 
 Banco de Horas
 
 =
 
-Soma dos saldos diários.
+Soma dos saldos de:
+
+- dias com jornada completa (EXIT)
+- dias úteis já passados sem nenhuma batida (falta = -carga diária)
+
+desde a criação do usuário até hoje.
+
+Jornadas incompletas (abertas, PAUSE ou LUNCH) não entram no banco.
+
+Hoje sem batida ainda não debita falta no banco.
 
 ---
 
@@ -212,7 +232,7 @@ Versão 1
 
 ✔ Banco de Horas
 
-- pode colocar pause dentro do dia
+✔ Pause dentro do dia
 
 Versão 2
 
@@ -221,8 +241,8 @@ Versão 2
 - Tema escuro
 - Responsividade
 - Controle de hora de almoço
-- Classificação de Usuarios(Admin , gestores e usuario comun)
-- Download de .csv e .xslx para migração de dados de outro sistema
+✔ Classificação de Usuarios(Admin , gestores e usuario comun)
+✔ Download de .csv e .xslx para migração de dados de outro sistema
 
 Versão 3
 
@@ -230,6 +250,18 @@ Versão 3
 - Notificações
 - Calendário
 - Estatísticas
+- pode fechar o banco
+- pode gerar batida (caso esqueca )
+    - pode editar a parte de horario de entra e saida (para admin)
+
+versao 4
+
+- criar estera de ci/cd
+- deploy automatico
+- prepara o deploy
+    - front : cloudflare
+    - back: render
+    - banco: neon postgres
 
 ---
 

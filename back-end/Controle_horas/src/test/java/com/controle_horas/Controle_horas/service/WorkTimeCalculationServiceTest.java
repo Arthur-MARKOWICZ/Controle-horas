@@ -2,13 +2,22 @@ package com.controle_horas.Controle_horas.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.controle_horas.Controle_horas.entity.CloseReason;
 import com.controle_horas.Controle_horas.entity.WorkLog;
+import com.controle_horas.Controle_horas.util.WorkDaysConverter;
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class WorkTimeCalculationServiceTest {
+
+    private static final Set<DayOfWeek> WEEKDAYS = WorkDaysConverter.defaultWorkDays();
+    private static final int DAILY_WORKLOAD = 530;
 
     private WorkTimeCalculationService workTimeCalculationService;
 
@@ -19,12 +28,24 @@ class WorkTimeCalculationServiceTest {
 
     @Test
     void calculateExpectedExitAt_shouldUseFirstEntryOfTheDay() {
-        WorkLog first = closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:00:00Z");
-        WorkLog second = closedLog("2026-07-14T16:00:00Z", "2026-07-14T18:00:00Z");
+        WorkLog first = closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:00:00Z", CloseReason.EXIT);
+        WorkLog second = closedLog("2026-07-14T16:00:00Z", "2026-07-14T18:00:00Z", CloseReason.EXIT);
 
         Instant expectedExitAt = workTimeCalculationService.calculateExpectedExitAt(List.of(second, first), 530);
 
         assertThat(expectedExitAt).isEqualTo(Instant.parse("2026-07-14T20:20:00Z"));
+    }
+
+    @Test
+    void calculateExpectedExitAt_shouldExtendByPausedMinutes() {
+        WorkLog morning = closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:00:00Z", CloseReason.PAUSE);
+        WorkLog afternoon = closedLog("2026-07-14T16:00:00Z", "2026-07-14T18:00:00Z", CloseReason.EXIT);
+
+        Instant expectedExitAt = workTimeCalculationService.calculateExpectedExitAt(
+                List.of(morning, afternoon), 530);
+
+        assertThat(expectedExitAt).isEqualTo(Instant.parse("2026-07-14T21:20:00Z"));
+        assertThat(workTimeCalculationService.sumPausedMinutes(List.of(morning, afternoon))).isEqualTo(60);
     }
 
     @Test
@@ -33,10 +54,21 @@ class WorkTimeCalculationServiceTest {
     }
 
     @Test
+    void calculateExpectedExitAt_onNonWorkDay_shouldUseZeroWorkload() {
+        WorkLog saturday = closedLog("2026-07-11T11:30:00Z", "2026-07-11T12:30:00Z", CloseReason.EXIT);
+        LocalDate saturdayDate = LocalDate.of(2026, 7, 11);
+
+        Instant expectedExitAt = workTimeCalculationService.calculateExpectedExitAt(
+                List.of(saturday), saturdayDate, DAILY_WORKLOAD, WEEKDAYS);
+
+        assertThat(expectedExitAt).isEqualTo(Instant.parse("2026-07-11T11:30:00Z"));
+    }
+
+    @Test
     void sumClosedWorkedMinutes_shouldSumMultipleClosedPairsInTheSameDay() {
         List<WorkLog> workLogs = List.of(
-                closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:30:00Z"),
-                closedLog("2026-07-14T16:30:00Z", "2026-07-14T19:00:00Z"),
+                closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:30:00Z", CloseReason.PAUSE),
+                closedLog("2026-07-14T16:30:00Z", "2026-07-14T19:00:00Z", CloseReason.EXIT),
                 openLog("2026-07-14T19:30:00Z"));
 
         assertThat(workTimeCalculationService.sumClosedWorkedMinutes(workLogs)).isEqualTo(390);
@@ -50,12 +82,41 @@ class WorkTimeCalculationServiceTest {
     }
 
     @Test
+    void calculateDailyBalanceMinutes_onSaturday_shouldCountAllWorkedAsPositive() {
+        LocalDate saturday = LocalDate.of(2026, 7, 11);
+        assertThat(workTimeCalculationService.calculateDailyBalanceMinutes(
+                        120, saturday, DAILY_WORKLOAD, WEEKDAYS))
+                .isEqualTo(120);
+    }
+
+    @Test
     void calculateHourBankMinutes_shouldIgnoreOpenJourney() {
         List<WorkLog> workLogs = List.of(
-                closedLog("2026-07-13T11:30:00Z", "2026-07-13T20:20:00Z"),
+                closedLog("2026-07-13T11:30:00Z", "2026-07-13T20:20:00Z", CloseReason.EXIT),
                 openLog("2026-07-14T11:30:00Z"));
 
-        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(workLogs, 530);
+        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
+                workLogs,
+                DAILY_WORKLOAD,
+                WEEKDAYS,
+                LocalDate.of(2026, 7, 13),
+                LocalDate.of(2026, 7, 14));
+
+        assertThat(hourBankMinutes).isZero();
+    }
+
+    @Test
+    void calculateHourBankMinutes_shouldIgnorePausedDay() {
+        List<WorkLog> workLogs = List.of(
+                closedLog("2026-07-13T11:30:00Z", "2026-07-13T20:20:00Z", CloseReason.EXIT),
+                closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:00:00Z", CloseReason.PAUSE));
+
+        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
+                workLogs,
+                DAILY_WORKLOAD,
+                WEEKDAYS,
+                LocalDate.of(2026, 7, 13),
+                LocalDate.of(2026, 7, 14));
 
         assertThat(hourBankMinutes).isZero();
     }
@@ -63,19 +124,99 @@ class WorkTimeCalculationServiceTest {
     @Test
     void calculateHourBankMinutes_shouldAccumulateAllClosedDays() {
         List<WorkLog> workLogs = List.of(
-                closedLog("2026-07-13T11:30:00Z", "2026-07-13T21:00:00Z"),
-                closedLog("2026-07-14T11:30:00Z", "2026-07-14T21:00:00Z"),
+                closedLog("2026-07-13T11:30:00Z", "2026-07-13T21:00:00Z", CloseReason.EXIT),
+                closedLog("2026-07-14T11:30:00Z", "2026-07-14T21:00:00Z", CloseReason.EXIT),
                 openLog("2026-07-15T12:00:00Z"));
 
-        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(workLogs, 530);
+        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
+                workLogs,
+                DAILY_WORKLOAD,
+                WEEKDAYS,
+                LocalDate.of(2026, 7, 13),
+                LocalDate.of(2026, 7, 15));
 
         assertThat(hourBankMinutes).isEqualTo(80);
     }
 
-    private WorkLog closedLog(String entryAt, String exitAt) {
+    @Test
+    void calculateHourBankMinutes_shouldDebitPastWorkDayWithoutLogs() {
+        List<WorkLog> workLogs = List.of(
+                closedLog("2026-07-14T11:30:00Z", "2026-07-14T20:20:00Z", CloseReason.EXIT));
+
+        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
+                workLogs,
+                DAILY_WORKLOAD,
+                WEEKDAYS,
+                LocalDate.of(2026, 7, 13),
+                LocalDate.of(2026, 7, 14));
+
+        assertThat(hourBankMinutes).isEqualTo(-DAILY_WORKLOAD);
+    }
+
+    @Test
+    void calculateHourBankMinutes_shouldNotDebitTodayWithoutLogs() {
+        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
+                List.of(),
+                DAILY_WORKLOAD,
+                WEEKDAYS,
+                LocalDate.of(2026, 7, 14),
+                LocalDate.of(2026, 7, 14));
+
+        assertThat(hourBankMinutes).isZero();
+    }
+
+    @Test
+    void calculateHourBankMinutes_onSaturdayWork_shouldAddPositiveBalance() {
+        List<WorkLog> workLogs = List.of(
+                closedLog("2026-07-11T11:30:00Z", "2026-07-11T13:30:00Z", CloseReason.EXIT));
+
+        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
+                workLogs,
+                DAILY_WORKLOAD,
+                WEEKDAYS,
+                LocalDate.of(2026, 7, 11),
+                LocalDate.of(2026, 7, 14));
+
+        // Saturday +120; Sunday skipped; Monday absence -530; Tuesday (today) not debited yet
+        assertThat(hourBankMinutes).isEqualTo(120 - DAILY_WORKLOAD);
+    }
+
+    @Test
+    void sumPausedMinutes_shouldIncludeLunchGaps() {
+        WorkLog morning = closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:00:00Z", CloseReason.LUNCH);
+        WorkLog afternoon = closedLog("2026-07-14T16:00:00Z", "2026-07-14T18:00:00Z", CloseReason.EXIT);
+
+        assertThat(workTimeCalculationService.sumPausedMinutes(List.of(morning, afternoon))).isEqualTo(60);
+        assertThat(workTimeCalculationService.isDayComplete(List.of(morning))).isFalse();
+    }
+
+    @Test
+    void calculateHourBankMinutes_shouldIgnoreDayEndingInLunch() {
+        List<WorkLog> workLogs = List.of(
+                closedLog("2026-07-13T11:30:00Z", "2026-07-13T20:20:00Z", CloseReason.EXIT),
+                closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:00:00Z", CloseReason.LUNCH));
+
+        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
+                workLogs,
+                DAILY_WORKLOAD,
+                WEEKDAYS,
+                LocalDate.of(2026, 7, 13),
+                LocalDate.of(2026, 7, 14));
+
+        assertThat(hourBankMinutes).isZero();
+    }
+
+    @Test
+    void isWorkDay_shouldRespectConfiguredDays() {
+        Set<DayOfWeek> mondayOnly = EnumSet.of(DayOfWeek.MONDAY);
+        assertThat(workTimeCalculationService.isWorkDay(LocalDate.of(2026, 7, 13), mondayOnly)).isTrue();
+        assertThat(workTimeCalculationService.isWorkDay(LocalDate.of(2026, 7, 14), mondayOnly)).isFalse();
+    }
+
+    private WorkLog closedLog(String entryAt, String exitAt, CloseReason closeReason) {
         WorkLog workLog = new WorkLog();
         workLog.setEntryAt(Instant.parse(entryAt));
-        workLog.setExitAt(Instant.parse(exitAt));
+        workLog.close(Instant.parse(exitAt), closeReason);
         return workLog;
     }
 

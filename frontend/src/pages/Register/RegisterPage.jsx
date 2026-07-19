@@ -34,6 +34,9 @@ function RegisterPage() {
   return (
     <>
       <h1 className={styles.title}>Criar conta</h1>
+      <p className={styles.hint}>
+        Contas criadas por aqui são Admin por padrão. Depois, em Configuração, você cria gestores e usuários da sua equipe.
+      </p>
       <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="name">

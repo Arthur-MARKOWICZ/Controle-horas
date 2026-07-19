@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ThemeProvider } from '../../contexts/ThemeContext'
 import HistoryPage from './HistoryPage'
 import { getCurrentMonthRange } from '../../utils/formatTime'
 
@@ -19,7 +20,9 @@ vi.mock('../../hooks/useHistory', () => ({
 function renderHistory() {
   return render(
     <MemoryRouter>
-      <HistoryPage />
+      <ThemeProvider>
+        <HistoryPage />
+      </ThemeProvider>
     </MemoryRouter>,
   )
 }
@@ -49,6 +52,7 @@ describe('HistoryPage', () => {
             firstEntryAt: '2026-07-14T11:30:00Z',
             lastExitAt: '2026-07-14T20:20:00Z',
             workedMinutes: 530,
+            pausedMinutes: 0,
             balanceMinutes: 0,
             isComplete: true,
             workLogs: [],
@@ -58,8 +62,11 @@ describe('HistoryPage', () => {
       startDate: monthRange.startDate,
       endDate: monthRange.endDate,
       isLoading: false,
+      isExporting: false,
       error: '',
+      exportError: '',
       loadHistory,
+      exportHistory: vi.fn(),
     })
 
     renderHistory()
@@ -67,6 +74,8 @@ describe('HistoryPage', () => {
     expect(screen.getByLabelText('Data inicial')).toHaveValue(monthRange.startDate)
     expect(screen.getByLabelText('Data final')).toHaveValue(monthRange.endDate)
     expect(screen.getByText('14/07/2026')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exportar Excel' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exportar PDF' })).toBeInTheDocument()
   })
 
   it('reloads the table when filtering by period', async () => {
@@ -84,8 +93,11 @@ describe('HistoryPage', () => {
       startDate: monthRange.startDate,
       endDate: monthRange.endDate,
       isLoading: false,
+      isExporting: false,
       error: '',
+      exportError: '',
       loadHistory,
+      exportHistory: vi.fn(),
     })
 
     renderHistory()
@@ -107,8 +119,11 @@ describe('HistoryPage', () => {
       startDate: monthRange.startDate,
       endDate: monthRange.endDate,
       isLoading: true,
+      isExporting: false,
       error: '',
+      exportError: '',
       loadHistory: vi.fn(),
+      exportHistory: vi.fn(),
     })
 
     const { rerender } = renderHistory()
@@ -119,13 +134,18 @@ describe('HistoryPage', () => {
       startDate: monthRange.startDate,
       endDate: monthRange.endDate,
       isLoading: false,
+      isExporting: false,
       error: 'Falha ao carregar histórico',
+      exportError: '',
       loadHistory: vi.fn(),
+      exportHistory: vi.fn(),
     })
 
     rerender(
       <MemoryRouter>
-        <HistoryPage />
+        <ThemeProvider>
+          <HistoryPage />
+        </ThemeProvider>
       </MemoryRouter>,
     )
 

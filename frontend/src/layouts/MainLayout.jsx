@@ -1,10 +1,12 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../hooks/useTheme'
 import styles from './MainLayout.module.css'
 
 function MainLayout({ children }) {
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user, logout, canManageUsers } = useAuth()
+  const { isDark, toggleTheme } = useTheme()
 
   const handleLogout = () => {
     logout()
@@ -32,6 +34,34 @@ function MainLayout({ children }) {
           >
             Histórico
           </NavLink>
+          <NavLink
+            to="/import"
+            className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
+          >
+            Importação
+          </NavLink>
+          <NavLink
+            to="/settings/schedule"
+            className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
+          >
+            Jornada
+          </NavLink>
+          {canManageUsers && (
+            <NavLink
+              to="/settings/users"
+              className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
+            >
+              Configuração
+            </NavLink>
+          )}
+          <button
+            className={styles.themeButton}
+            type="button"
+            onClick={toggleTheme}
+            aria-label={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'}
+          >
+            {isDark ? 'Tema claro' : 'Tema escuro'}
+          </button>
           <button className={styles.logoutButton} type="button" onClick={handleLogout}>
             Sair
           </button>

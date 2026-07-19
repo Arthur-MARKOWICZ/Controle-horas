@@ -1,0 +1,87 @@
+.page {
+  width: 100%;
+}
+
+.header h1 {
+  margin: 0;
+  font-family: var(--font-display);
+}
+
+.description {
+  color: var(--color-text-muted);
+  margin: var(--space-sm) 0 0;
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.success {
+  color: var(--color-primary);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
+.card h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.actions button,
+.card input[type='file'] {
+  margin-top: var(--space-md);
+}
+
+.actions button {
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 2.75rem;
+}
+
+@media (max-width: 42rem) {
+  .actions {
+    flex-direction: column;
+  }
+
+  .actions button,
+  .card input[type='file'] {
+    width: 100%;
+  }
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  margin-top: var(--space-md);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}

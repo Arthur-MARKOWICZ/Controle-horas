@@ -21,13 +21,14 @@ public class JwtService {
         this.secretKey = Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateToken(UUID userId, String email) {
+    public String generateToken(UUID userId, String email, String role) {
         Date issuedAt = new Date();
         Date expiration = new Date(issuedAt.getTime() + jwtProperties.getExpirationMs());
 
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("email", email)
+                .claim("role", role)
                 .issuedAt(issuedAt)
                 .expiration(expiration)
                 .signWith(secretKey)
@@ -40,6 +41,10 @@ public class JwtService {
 
     public String extractEmail(String token) {
         return parseClaims(token).get("email", String.class);
+    }
+
+    public String extractRole(String token) {
+        return parseClaims(token).get("role", String.class);
     }
 
     public boolean isTokenValid(String token) {

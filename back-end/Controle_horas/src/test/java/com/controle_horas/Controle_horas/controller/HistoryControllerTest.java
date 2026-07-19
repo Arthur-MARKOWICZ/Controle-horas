@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.controle_horas.Controle_horas.dto.HistoryDayResponse;
 import com.controle_horas.Controle_horas.dto.HistoryResponse;
 import com.controle_horas.Controle_horas.security.JwtAuthenticationFilter;
+import com.controle_horas.Controle_horas.service.HistoryExportService;
 import com.controle_horas.Controle_horas.service.HistoryService;
 import java.time.LocalDate;
 import java.util.List;
@@ -36,6 +37,9 @@ class HistoryControllerTest {
     @MockitoBean
     private HistoryService historyService;
 
+    @MockitoBean
+    private HistoryExportService historyExportService;
+
     @Test
     void getHistory_shouldRequireAuthentication() throws Exception {
         mockMvc.perform(get("/api/history")
@@ -58,6 +62,7 @@ class HistoryControllerTest {
                                 null,
                                 null,
                                 530,
+                                0,
                                 0,
                                 true,
                                 List.of()))));

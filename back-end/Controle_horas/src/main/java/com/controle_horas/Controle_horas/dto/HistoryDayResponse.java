@@ -9,6 +9,7 @@ public record HistoryDayResponse(
         Instant firstEntryAt,
         Instant lastExitAt,
         int workedMinutes,
+        int pausedMinutes,
         int balanceMinutes,
         boolean isComplete,
         List<WorkLogResponse> workLogs

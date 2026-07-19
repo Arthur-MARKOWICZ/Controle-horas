@@ -2,6 +2,8 @@ package com.controle_horas.Controle_horas.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -29,6 +31,10 @@ public class WorkLog {
     @Column(name = "exit_at")
     private Instant exitAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "close_reason", length = 20)
+    private CloseReason closeReason;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -38,19 +44,56 @@ public class WorkLog {
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
-        if (id == null) id = UUID.randomUUID();
+        if (id == null) {
+            id = UUID.randomUUID();
+        }
         createdAt = now;
         updatedAt = now;
     }
 
     @PreUpdate
-    void onUpdate() { updatedAt = Instant.now(); }
+    void onUpdate() {
+        updatedAt = Instant.now();
+    }
 
-    public UUID getId() { return id; }
-    public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
-    public Instant getEntryAt() { return entryAt; }
-    public void setEntryAt(Instant entryAt) { this.entryAt = entryAt; }
-    public Instant getExitAt() { return exitAt; }
-    public void setExitAt(Instant exitAt) { this.exitAt = exitAt; }
+    public UUID getId() {
+        return id;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+    public Instant getEntryAt() {
+        return entryAt;
+    }
+
+    public void setEntryAt(Instant entryAt) {
+        this.entryAt = entryAt;
+    }
+
+    public Instant getExitAt() {
+        return exitAt;
+    }
+
+    public void setExitAt(Instant exitAt) {
+        this.exitAt = exitAt;
+    }
+
+    public CloseReason getCloseReason() {
+        return closeReason;
+    }
+
+    public void setCloseReason(CloseReason closeReason) {
+        this.closeReason = closeReason;
+    }
+
+    public void close(Instant exitAt, CloseReason closeReason) {
+        this.exitAt = exitAt;
+        this.closeReason = closeReason;
+    }
 }

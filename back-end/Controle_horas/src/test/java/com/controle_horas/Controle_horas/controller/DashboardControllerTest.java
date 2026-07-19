@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.controle_horas.Controle_horas.dto.DashboardResponse;
 import com.controle_horas.Controle_horas.security.JwtAuthenticationFilter;
 import com.controle_horas.Controle_horas.service.DashboardService;
+import com.controle_horas.Controle_horas.util.WorkDaysConverter;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -46,14 +47,18 @@ class DashboardControllerTest {
         when(dashboardService.getToday("arthur@example.com"))
                 .thenReturn(new DashboardResponse(
                         LocalDate.of(2026, 7, 14),
-                        530,
+                        470,
                         LocalTime.of(8, 30),
                         LocalTime.of(17, 20),
+                        true,
+                        60,
+                        WorkDaysConverter.defaultWorkDays(),
                         "ENTRY",
                         Instant.parse("2026-07-14T20:20:00Z"),
                         450,
-                        -80,
-                        -80,
+                        0,
+                        -20,
+                        -20,
                         List.of()));
 
         mockMvc.perform(get("/api/dashboard/today")
@@ -64,7 +69,7 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.message").value("Dashboard retrieved successfully"))
                 .andExpect(jsonPath("$.data.expectedExitAt").value("2026-07-14T20:20:00Z"))
                 .andExpect(jsonPath("$.data.workedMinutesToday").value(450))
-                .andExpect(jsonPath("$.data.balanceMinutesToday").value(-80))
-                .andExpect(jsonPath("$.data.hourBankMinutes").value(-80));
+                .andExpect(jsonPath("$.data.balanceMinutesToday").value(-20))
+                .andExpect(jsonPath("$.data.hourBankMinutes").value(-20));
     }
 }

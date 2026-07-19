@@ -18,7 +18,7 @@
 
 .summaryGrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-md);
   margin-bottom: var(--space-lg);
 }
@@ -60,14 +60,37 @@
   border: 0;
   border-radius: var(--radius-sm);
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   padding: 0.8rem 1rem;
   cursor: pointer;
   font-weight: 700;
+  min-height: 2.75rem;
 }
 
 .actionButton:hover {
   background: var(--color-primary-hover);
+}
+
+.actionGroup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.actionGroup .actionButton {
+  margin-top: 0;
+}
+
+.secondaryAction {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  font-weight: 700;
 }
 
 button:disabled,
@@ -99,23 +122,57 @@ input:disabled {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: 0.65rem;
-  background: white;
+  background: var(--color-surface);
+}
+
+.workloadForm > label input[type="number"] {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem;
+  background: var(--color-surface);
+}
+
+.checkboxLabel {
+  display: flex !important;
+  align-items: center;
+  gap: var(--space-sm);
+  font-weight: 600;
+  margin: var(--space-sm) 0;
+}
+
+.checkboxLabel input {
+  width: auto;
 }
 
 .workloadForm button {
   border: 1px solid var(--color-primary);
   border-radius: var(--radius-sm);
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   padding: 0.65rem 1rem;
   cursor: pointer;
   font-weight: 600;
+  min-height: 2.75rem;
 }
 
 .fieldError,
 .error {
   color: var(--color-danger);
   margin: var(--space-sm) 0 0;
+}
+
+.settingsLink {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.settingsLink:hover {
+  text-decoration: underline;
 }
 
 .success {
@@ -172,13 +229,13 @@ th {
 }
 
 .open {
-  background: #fff3cd;
-  color: #725c00;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
 }
 
 .completed {
-  background: #dff4e8;
-  color: #145c3a;
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 @media (max-width: 56rem) {
@@ -190,7 +247,8 @@ th {
 @media (max-width: 42rem) {
   .grid,
   .timeFields,
-  .summaryGrid {
+  .summaryGrid,
+  .actionGroup {
     grid-template-columns: 1fr;
   }
 

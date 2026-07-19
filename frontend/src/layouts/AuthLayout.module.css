@@ -45,7 +45,7 @@
   gap: var(--space-md);
 }
 
-@media (max-width: 480px) {
+@media (max-width: 42rem) {
   .page {
     padding: var(--space-md);
   }
