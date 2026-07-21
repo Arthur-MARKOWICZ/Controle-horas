@@ -1,9 +1,0 @@
-target/
-.mvn/
-.idea/
-*.iml
-*.md
-.git/
-.gitignore
-.gitattributes
-src/test/
