@@ -12,7 +12,11 @@ import ProtectedRoute from './ProtectedRoute'
 import RoleRoute from './RoleRoute'
 
 function GuestRoute({ children }) {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isSessionReady } = useAuth()
+
+  if (!isSessionReady) {
+    return <p role="status">Carregando sessão...</p>
+  }
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />
@@ -46,8 +50,11 @@ function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/history" element={<HistoryPage />} />
-        <Route path="/import" element={<ImportPage />} />
         <Route path="/settings/schedule" element={<ScheduleSettingsPage />} />
+      </Route>
+
+      <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
+        <Route path="/import" element={<ImportPage />} />
       </Route>
 
       <Route element={<RoleRoute allowedRoles={['ADMIN', 'MANAGER']} />}>

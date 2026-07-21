@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as dashboardService from '../services/dashboardService'
 import { getErrorMessage } from '../utils/errorMessage'
+
+const OPEN_SESSION_POLL_INTERVAL_MS = 30_000
 
 export function useDashboard() {
   const [dashboard, setDashboard] = useState(null)
@@ -8,22 +10,46 @@ export function useDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const isSubmittingRef = useRef(false)
 
-  const loadDashboard = useCallback(async () => {
-    setIsLoading(true)
+  const loadDashboard = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setIsLoading(true)
+    }
     setError('')
     try {
       const response = await dashboardService.getTodayDashboard()
       if (!response.success || !response.data) throw new Error(response.message || 'Unable to load dashboard')
       setDashboard(response.data)
     } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Unable to load dashboard'))
+      setError(await getErrorMessage(requestError, 'Unable to load dashboard'))
     } finally {
-      setIsLoading(false)
+      if (!silent) {
+        setIsLoading(false)
+      }
     }
   }, [])
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
+
+  useEffect(() => {
+    isSubmittingRef.current = isSubmitting
+  }, [isSubmitting])
+
+  useEffect(() => {
+    const hasOpenSession = dashboard?.nextAction === 'PAUSE_OR_EXIT'
+    if (!hasOpenSession) {
+      return undefined
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (!isSubmittingRef.current) {
+        loadDashboard({ silent: true })
+      }
+    }, OPEN_SESSION_POLL_INTERVAL_MS)
+
+    return () => window.clearInterval(intervalId)
+  }, [dashboard?.nextAction, loadDashboard])
 
   const runAction = useCallback(async (action) => {
     setIsSubmitting(true)
@@ -35,7 +61,7 @@ export function useDashboard() {
       setDashboard(response.data)
       setMessage(response.message)
     } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Unable to register time'))
+      setError(await getErrorMessage(requestError, 'Unable to register time'))
     } finally {
       setIsSubmitting(false)
     }
@@ -74,7 +100,7 @@ export function useDashboard() {
       setMessage(response.message)
       return true
     } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Unable to save daily workload'))
+      setError(await getErrorMessage(requestError, 'Unable to save daily workload'))
       return false
     } finally {
       setIsSubmitting(false)

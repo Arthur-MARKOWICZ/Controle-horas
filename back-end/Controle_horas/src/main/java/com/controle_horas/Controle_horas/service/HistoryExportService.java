@@ -105,34 +105,35 @@ public class HistoryExportService {
 
     private int writeExcelHeader(Sheet sheet, int rowIndex, User user, HistoryResponse history) {
         Row title = sheet.createRow(rowIndex++);
-        title.createCell(0).setCellValue("Historico de horas");
+        title.createCell(0).setCellValue(sanitizeExcelText("Historico de horas"));
 
         Row userRow = sheet.createRow(rowIndex++);
-        userRow.createCell(0).setCellValue("Usuario");
-        userRow.createCell(1).setCellValue(user.getName() + " (" + user.getEmail() + ")");
+        userRow.createCell(0).setCellValue(sanitizeExcelText("Usuario"));
+        userRow.createCell(1).setCellValue(sanitizeExcelText(user.getName() + " (" + user.getEmail() + ")"));
 
         Row periodRow = sheet.createRow(rowIndex++);
-        periodRow.createCell(0).setCellValue("Periodo");
-        periodRow.createCell(1).setCellValue(formatDate(history.startDate()) + " a " + formatDate(history.endDate()));
+        periodRow.createCell(0).setCellValue(sanitizeExcelText("Periodo"));
+        periodRow.createCell(1).setCellValue(sanitizeExcelText(
+                formatDate(history.startDate()) + " a " + formatDate(history.endDate())));
 
         return rowIndex + 1;
     }
 
     private int writeExcelSummary(Sheet sheet, int rowIndex, HistoryResponse history) {
         Row summaryTitle = sheet.createRow(rowIndex++);
-        summaryTitle.createCell(0).setCellValue("Resumo");
+        summaryTitle.createCell(0).setCellValue(sanitizeExcelText("Resumo"));
 
         Row worked = sheet.createRow(rowIndex++);
-        worked.createCell(0).setCellValue("Horas trabalhadas");
-        worked.createCell(1).setCellValue(formatDuration(history.totalWorkedMinutes()));
+        worked.createCell(0).setCellValue(sanitizeExcelText("Horas trabalhadas"));
+        worked.createCell(1).setCellValue(sanitizeExcelText(formatDuration(history.totalWorkedMinutes())));
 
         Row balance = sheet.createRow(rowIndex++);
-        balance.createCell(0).setCellValue("Saldo do periodo");
-        balance.createCell(1).setCellValue(formatSignedDuration(history.totalBalanceMinutes()));
+        balance.createCell(0).setCellValue(sanitizeExcelText("Saldo do periodo"));
+        balance.createCell(1).setCellValue(sanitizeExcelText(formatSignedDuration(history.totalBalanceMinutes())));
 
         Row hourBank = sheet.createRow(rowIndex++);
-        hourBank.createCell(0).setCellValue("Banco de horas");
-        hourBank.createCell(1).setCellValue(formatSignedDuration(history.hourBankMinutes()));
+        hourBank.createCell(0).setCellValue(sanitizeExcelText("Banco de horas"));
+        hourBank.createCell(1).setCellValue(sanitizeExcelText(formatSignedDuration(history.hourBankMinutes())));
 
         return rowIndex;
     }
@@ -140,21 +141,21 @@ public class HistoryExportService {
     private void writeExcelDays(Sheet sheet, int startRow, HistoryResponse history) {
         int rowIndex = startRow;
         Row header = sheet.createRow(rowIndex++);
-        header.createCell(0).setCellValue("Data");
-        header.createCell(1).setCellValue("Primeira entrada");
-        header.createCell(2).setCellValue("Ultima saida");
-        header.createCell(3).setCellValue("Horas trabalhadas");
-        header.createCell(4).setCellValue("Saldo");
-        header.createCell(5).setCellValue("Status");
+        header.createCell(0).setCellValue(sanitizeExcelText("Data"));
+        header.createCell(1).setCellValue(sanitizeExcelText("Primeira entrada"));
+        header.createCell(2).setCellValue(sanitizeExcelText("Ultima saida"));
+        header.createCell(3).setCellValue(sanitizeExcelText("Horas trabalhadas"));
+        header.createCell(4).setCellValue(sanitizeExcelText("Saldo"));
+        header.createCell(5).setCellValue(sanitizeExcelText("Status"));
 
         for (HistoryDayResponse day : history.days()) {
             Row row = sheet.createRow(rowIndex++);
-            row.createCell(0).setCellValue(formatDate(day.date()));
-            row.createCell(1).setCellValue(formatInstant(day.firstEntryAt()));
-            row.createCell(2).setCellValue(formatInstant(day.lastExitAt()));
-            row.createCell(3).setCellValue(formatDuration(day.workedMinutes()));
-            row.createCell(4).setCellValue(formatSignedDuration(day.balanceMinutes()));
-            row.createCell(5).setCellValue(day.isComplete() ? "Completo" : "Em andamento");
+            row.createCell(0).setCellValue(sanitizeExcelText(formatDate(day.date())));
+            row.createCell(1).setCellValue(sanitizeExcelText(formatInstant(day.firstEntryAt())));
+            row.createCell(2).setCellValue(sanitizeExcelText(formatInstant(day.lastExitAt())));
+            row.createCell(3).setCellValue(sanitizeExcelText(formatDuration(day.workedMinutes())));
+            row.createCell(4).setCellValue(sanitizeExcelText(formatSignedDuration(day.balanceMinutes())));
+            row.createCell(5).setCellValue(sanitizeExcelText(day.isComplete() ? "Completo" : "Em andamento"));
         }
     }
 
@@ -215,5 +216,16 @@ public class HistoryExportService {
     private String formatSignedDuration(int totalMinutes) {
         String sign = totalMinutes > 0 ? "+" : (totalMinutes < 0 ? "-" : "");
         return sign + formatDuration(totalMinutes);
+    }
+
+    static String sanitizeExcelText(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        char first = value.charAt(0);
+        if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r') {
+            return "'" + value;
+        }
+        return value;
     }
 }

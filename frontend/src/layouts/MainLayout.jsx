@@ -5,11 +5,11 @@ import styles from './MainLayout.module.css'
 
 function MainLayout({ children }) {
   const navigate = useNavigate()
-  const { user, logout, canManageUsers } = useAuth()
+  const { user, logout, canManageUsers, isAdmin } = useAuth()
   const { isDark, toggleTheme } = useTheme()
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     navigate('/login', { replace: true })
   }
 
@@ -34,12 +34,14 @@ function MainLayout({ children }) {
           >
             Histórico
           </NavLink>
-          <NavLink
-            to="/import"
-            className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
-          >
-            Importação
-          </NavLink>
+          {isAdmin && (
+            <NavLink
+              to="/import"
+              className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
+            >
+              Importação
+            </NavLink>
+          )}
           <NavLink
             to="/settings/schedule"
             className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}

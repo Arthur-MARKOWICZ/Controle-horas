@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.controle_horas.Controle_horas.dto.DashboardResponse;
+import com.controle_horas.Controle_horas.security.AuthRateLimitFilter;
 import com.controle_horas.Controle_horas.security.JwtAuthenticationFilter;
 import com.controle_horas.Controle_horas.service.DashboardService;
 import com.controle_horas.Controle_horas.util.WorkDaysConverter;
@@ -27,7 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
         controllers = DashboardController.class,
         excludeFilters = @ComponentScan.Filter(
                 type = FilterType.ASSIGNABLE_TYPE,
-                classes = JwtAuthenticationFilter.class))
+                classes = {JwtAuthenticationFilter.class, AuthRateLimitFilter.class}))
 class DashboardControllerTest {
 
     @Autowired

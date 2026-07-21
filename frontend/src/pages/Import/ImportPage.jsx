@@ -37,7 +37,7 @@ function ImportPage() {
         <section className={styles.card} aria-labelledby="template-title">
           <h2 id="template-title">Arquivo modelo</h2>
           <p className={styles.description}>
-            Colunas: email, entry_at, exit_at, close_reason (PAUSE ou EXIT).
+            Colunas: email, entry_at, exit_at, close_reason (PAUSE, LUNCH ou EXIT).
           </p>
           <div className={styles.actions}>
             <button type="button" disabled={isDownloading} onClick={() => downloadTemplate('csv')}>

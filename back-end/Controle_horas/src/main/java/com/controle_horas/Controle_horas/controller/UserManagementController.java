@@ -82,7 +82,7 @@ public class UserManagementController {
     public ResponseEntity<ApiResponse<UserResponse>> assignManager(
             Principal principal,
             @PathVariable UUID userId,
-            @RequestBody AssignManagerRequest request) {
+            @Valid @RequestBody AssignManagerRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(
                 "Manager assigned successfully",
                 userManagementService.assignManager(principal.getName(), userId, request)));

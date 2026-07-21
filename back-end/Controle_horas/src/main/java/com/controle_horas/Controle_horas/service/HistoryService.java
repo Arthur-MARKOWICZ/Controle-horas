@@ -10,6 +10,7 @@ import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -21,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class HistoryService {
+
+    public static final int MAX_PERIOD_DAYS = 90;
 
     private final WorkLogRepository workLogRepository;
     private final UserService userService;
@@ -55,6 +58,7 @@ public class HistoryService {
         int dailyWorkloadMinutes = user.getDailyWorkloadMinutes();
         LocalDate today = LocalDate.now(clock.withZone(WorkTimeCalculationService.DISPLAY_ZONE));
         LocalDate fromDate = workTimeCalculationService.toDisplayDate(user.getCreatedAt());
+        LocalDate bankUntilDate = endDate.isAfter(today) ? today : endDate;
 
         Map<LocalDate, List<WorkLog>> logsByDate = workTimeCalculationService.groupByDisplayDate(periodLogs);
         List<HistoryDayResponse> days = buildHistoryDays(
@@ -72,8 +76,8 @@ public class HistoryService {
                 allLogs,
                 dailyWorkloadMinutes,
                 workDays,
-                fromDate,
-                today);
+                startDate,
+                bankUntilDate);
 
         return new HistoryResponse(
                 startDate,
@@ -118,7 +122,7 @@ public class HistoryService {
             List<WorkLog> dayLogs,
             int dailyWorkloadMinutes,
             Set<DayOfWeek> workDays) {
-        int workedMinutes = workTimeCalculationService.sumClosedWorkedMinutes(dayLogs);
+        int workedMinutes = workTimeCalculationService.sumWorkedMinutesOnDate(dayLogs, date);
         int balanceMinutes = workTimeCalculationService.calculateDailyBalanceMinutes(
                 workedMinutes, date, dailyWorkloadMinutes, workDays);
         int pausedMinutes = workTimeCalculationService.sumPausedMinutes(dayLogs);
@@ -173,6 +177,11 @@ public class HistoryService {
         }
         if (startDate.isAfter(endDate)) {
             throw new IllegalArgumentException("startDate must be less than or equal to endDate.");
+        }
+        long periodDays = ChronoUnit.DAYS.between(startDate, endDate);
+        if (periodDays > MAX_PERIOD_DAYS) {
+            throw new IllegalArgumentException(
+                    "Period must be at most " + MAX_PERIOD_DAYS + " days.");
         }
     }
 }

@@ -25,7 +25,7 @@ export function useHistory(initialRange = getCurrentMonthRange()) {
       setEndDate(nextEndDate)
     } catch (requestError) {
       setHistory(null)
-      setError(getErrorMessage(requestError, 'Unable to load history'))
+      setError(await getErrorMessage(requestError, 'Unable to load history'))
     } finally {
       setIsLoading(false)
     }
@@ -46,7 +46,7 @@ export function useHistory(initialRange = getCurrentMonthRange()) {
       historyService.downloadHistoryFile(blob, filename)
       return true
     } catch (requestError) {
-      setExportError(getErrorMessage(requestError, 'Unable to export history'))
+      setExportError(await getErrorMessage(requestError, 'Unable to export history'))
       return false
     } finally {
       setIsExporting(false)

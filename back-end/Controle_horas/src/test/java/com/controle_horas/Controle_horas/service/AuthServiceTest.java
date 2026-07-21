@@ -12,7 +12,6 @@ import com.controle_horas.Controle_horas.dto.LoginRequest;
 import com.controle_horas.Controle_horas.dto.RegisterRequest;
 import com.controle_horas.Controle_horas.entity.User;
 import com.controle_horas.Controle_horas.entity.UserRole;
-import com.controle_horas.Controle_horas.exception.EmailAlreadyRegisteredException;
 import com.controle_horas.Controle_horas.exception.InvalidCredentialsException;
 import com.controle_horas.Controle_horas.repository.UserRepository;
 import java.util.Optional;
@@ -37,6 +36,9 @@ class AuthServiceTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private TokenDenylistService tokenDenylistService;
 
     @InjectMocks
     private AuthService authService;
@@ -83,8 +85,8 @@ class AuthServiceTest {
         when(userRepository.existsByEmail("arthur@email.com")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(EmailAlreadyRegisteredException.class)
-                .hasMessage("Email is already registered");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Unable to complete registration");
 
         verify(userRepository, never()).save(any(User.class));
     }

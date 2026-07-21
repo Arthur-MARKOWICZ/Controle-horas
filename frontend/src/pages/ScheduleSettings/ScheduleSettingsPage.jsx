@@ -43,11 +43,11 @@ function ScheduleSettingsPage() {
   }, [dashboard, reset])
 
   const onSubmit = async (values) => {
-    const selectedWorkDays = normalizeWorkDays(workDays)
-    if (selectedWorkDays.length === 0) {
+    if (!Array.isArray(workDays) || workDays.length === 0) {
       setWorkDaysError('Selecione pelo menos um dia de trabalho.')
       return
     }
+    const selectedWorkDays = normalizeWorkDays(workDays)
     setWorkDaysError('')
     await saveDailyWorkload({
       standardEntryTime: values.standardEntryTime,

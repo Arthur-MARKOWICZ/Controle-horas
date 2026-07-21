@@ -111,7 +111,8 @@ public class DashboardService {
                 .findByUserIdAndEntryAtGreaterThanEqualAndEntryAtLessThanOrderByEntryAtAsc(user.getId(), start, end);
         List<WorkLog> allLogs = workLogRepository.findByUserIdOrderByEntryAtAsc(user.getId());
 
-        int workedMinutesToday = workTimeCalculationService.sumClosedWorkedMinutes(todayLogs);
+        Instant now = Instant.now(clock);
+        int workedMinutesToday = workTimeCalculationService.sumWorkedMinutesIncludingOpen(todayLogs, now);
         int pausedMinutesToday = workTimeCalculationService.sumPausedMinutes(todayLogs);
         int balanceMinutesToday = workTimeCalculationService.calculateDailyBalanceMinutes(
                 workedMinutesToday,
@@ -122,7 +123,9 @@ public class DashboardService {
                 todayLogs,
                 date,
                 user.getDailyWorkloadMinutes(),
-                user.getWorkDays());
+                user.getWorkDays(),
+                user.isLunchEnabled(),
+                user.getLunchDurationMinutes());
         LocalDate fromDate = workTimeCalculationService.toDisplayDate(user.getCreatedAt());
         int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
                 allLogs,

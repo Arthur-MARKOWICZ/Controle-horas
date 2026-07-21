@@ -10,18 +10,22 @@ import com.controle_horas.Controle_horas.exception.ResourceNotFoundException;
 import com.controle_horas.Controle_horas.repository.UserRepository;
 import com.controle_horas.Controle_horas.repository.WorkLogRepository;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -38,6 +42,10 @@ public class WorkLogImportService {
             "user@empresa.com,2026-07-14T08:30:00-03:00,2026-07-14T12:00:00-03:00,PAUSE";
     public static final String TEMPLATE_EXAMPLE_TWO =
             "user@empresa.com,2026-07-14T13:00:00-03:00,2026-07-14T17:20:00-03:00,EXIT";
+    public static final int MAX_IMPORT_ROWS = 5000;
+
+    private static final byte ZIP_LOCAL_FILE_HEADER_0 = 0x50;
+    private static final byte ZIP_LOCAL_FILE_HEADER_1 = 0x4B;
 
     private final AccessControlService accessControlService;
     private final UserRepository userRepository;
@@ -90,17 +98,30 @@ public class WorkLogImportService {
         User actor = accessControlService.requireActor(actorEmail);
         String filename = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase(Locale.ROOT) : "";
 
+        byte[] content;
+        try {
+            content = file.getBytes();
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("Unable to read uploaded file");
+        }
+
+        validateFileContent(filename, content);
+
         List<ImportRow> rows;
         try {
             if (filename.endsWith(".csv")) {
-                rows = parseCsv(file.getInputStream());
+                rows = parseCsv(new ByteArrayInputStream(content));
             } else if (filename.endsWith(".xlsx")) {
-                rows = parseXlsx(file.getInputStream());
+                rows = parseXlsx(new ByteArrayInputStream(content));
             } else {
                 throw new IllegalArgumentException("Unsupported file type. Use .csv or .xlsx");
             }
         } catch (IOException exception) {
             throw new IllegalArgumentException("Unable to read uploaded file");
+        }
+
+        if (rows.size() > MAX_IMPORT_ROWS) {
+            throw new IllegalArgumentException("File exceeds maximum of " + MAX_IMPORT_ROWS + " data rows");
         }
 
         int importedCount = 0;
@@ -116,6 +137,29 @@ public class WorkLogImportService {
         }
 
         return new WorkLogImportResponse(importedCount, errors.size(), errors);
+    }
+
+    private void validateFileContent(String filename, byte[] content) {
+        if (content == null || content.length == 0) {
+            throw new IllegalArgumentException("File is required");
+        }
+        boolean looksLikeZip = content.length >= 2
+                && content[0] == ZIP_LOCAL_FILE_HEADER_0
+                && content[1] == ZIP_LOCAL_FILE_HEADER_1;
+
+        if (filename.endsWith(".xlsx")) {
+            if (!looksLikeZip) {
+                throw new IllegalArgumentException("Invalid XLSX file content");
+            }
+            return;
+        }
+        if (filename.endsWith(".csv")) {
+            if (looksLikeZip) {
+                throw new IllegalArgumentException("Invalid CSV file content");
+            }
+            return;
+        }
+        throw new IllegalArgumentException("Unsupported file type. Use .csv or .xlsx");
     }
 
     private void importRow(User actor, ImportRow row) {
@@ -250,7 +294,30 @@ public class WorkLogImportService {
     }
 
     private String[] splitCsv(String line) {
-        return line.split(",", -1);
+        List<String> fields = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+
+        for (int index = 0; index < line.length(); index++) {
+            char character = line.charAt(index);
+            if (character == '"') {
+                if (inQuotes && index + 1 < line.length() && line.charAt(index + 1) == '"') {
+                    current.append('"');
+                    index++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+                continue;
+            }
+            if (character == ',' && !inQuotes) {
+                fields.add(current.toString());
+                current.setLength(0);
+                continue;
+            }
+            current.append(character);
+        }
+        fields.add(current.toString());
+        return fields.toArray(String[]::new);
     }
 
     private String valueAt(String[] values, int index) {
@@ -266,7 +333,17 @@ public class WorkLogImportService {
             return "";
         }
         Cell cell = row.getCell(index);
-        return cell == null ? "" : dataFormatter.formatCellValue(cell).trim();
+        if (cell == null) {
+            return "";
+        }
+        if (cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
+            LocalDateTime localDateTime = cell.getLocalDateTimeCellValue();
+            return localDateTime
+                    .atZone(WorkTimeCalculationService.DISPLAY_ZONE)
+                    .toInstant()
+                    .toString();
+        }
+        return dataFormatter.formatCellValue(cell).trim();
     }
 
     private boolean isBlankRow(Row row) {

@@ -5,7 +5,6 @@ import com.controle_horas.Controle_horas.dto.LoginRequest;
 import com.controle_horas.Controle_horas.dto.RegisterRequest;
 import com.controle_horas.Controle_horas.entity.User;
 import com.controle_horas.Controle_horas.entity.UserRole;
-import com.controle_horas.Controle_horas.exception.EmailAlreadyRegisteredException;
 import com.controle_horas.Controle_horas.exception.InvalidCredentialsException;
 import com.controle_horas.Controle_horas.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,18 +14,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
+    private static final String BEARER_PREFIX = "Bearer ";
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final TokenDenylistService tokenDenylistService;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            JwtService jwtService
+            JwtService jwtService,
+            TokenDenylistService tokenDenylistService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.tokenDenylistService = tokenDenylistService;
     }
 
     @Transactional
@@ -34,7 +38,7 @@ public class AuthService {
         String normalizedEmail = normalizeEmail(request.email());
 
         if (userRepository.existsByEmail(normalizedEmail)) {
-            throw new EmailAlreadyRegisteredException("Email is already registered");
+            throw new IllegalArgumentException("Unable to complete registration");
         }
 
         User user = new User();
@@ -62,6 +66,18 @@ public class AuthService {
         }
 
         return buildAuthResponse(user);
+    }
+
+    public void logout(String authorizationHeader) {
+        if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
+            return;
+        }
+        String token = authorizationHeader.substring(BEARER_PREFIX.length()).trim();
+        if (token.isEmpty() || !jwtService.isTokenValid(token)) {
+            return;
+        }
+        String tokenId = jwtService.extractTokenId(token);
+        tokenDenylistService.revoke(tokenId, jwtService.extractExpiration(token));
     }
 
     private AuthResponse buildAuthResponse(User user) {

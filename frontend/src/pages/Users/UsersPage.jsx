@@ -30,6 +30,8 @@ function UsersPage() {
   const [editingUserId, setEditingUserId] = useState(null)
   const [createWorkDays, setCreateWorkDays] = useState(DEFAULT_WORK_DAYS)
   const [editWorkDays, setEditWorkDays] = useState(DEFAULT_WORK_DAYS)
+  const [createWorkDaysError, setCreateWorkDaysError] = useState('')
+  const [editWorkDaysError, setEditWorkDaysError] = useState('')
   const {
     register,
     handleSubmit,
@@ -58,6 +60,7 @@ function UsersPage() {
     handleSubmit: handleSubmitEdit,
     reset: resetEdit,
     watch: watchEdit,
+    formState: { errors: errorsEdit },
   } = useForm()
 
   const editLunchEnabled = watchEdit('lunchEnabled')
@@ -104,10 +107,12 @@ function UsersPage() {
   )
 
   const onCreate = async (values) => {
-    const selectedWorkDays = normalizeWorkDays(createWorkDays)
-    if (selectedWorkDays.length === 0) {
+    if (!Array.isArray(createWorkDays) || createWorkDays.length === 0) {
+      setCreateWorkDaysError('Selecione pelo menos um dia de trabalho.')
       return
     }
+    setCreateWorkDaysError('')
+    const selectedWorkDays = normalizeWorkDays(createWorkDays)
     const success = await createUser({
       name: values.name,
       email: values.email,
@@ -139,10 +144,12 @@ function UsersPage() {
   }
 
   const onUpdate = async (values) => {
-    const selectedWorkDays = normalizeWorkDays(editWorkDays)
-    if (selectedWorkDays.length === 0) {
+    if (!Array.isArray(editWorkDays) || editWorkDays.length === 0) {
+      setEditWorkDaysError('Selecione pelo menos um dia de trabalho.')
       return
     }
+    setEditWorkDaysError('')
+    const selectedWorkDays = normalizeWorkDays(editWorkDays)
     const editingUser = users.find((item) => item.id === editingUserId)
     const success = await updateUser(editingUserId, {
       name: values.name,
@@ -207,6 +214,11 @@ function UsersPage() {
                 {...register('password', {
                   required: 'Informe a senha.',
                   minLength: { value: 8, message: 'Mínimo de 8 caracteres.' },
+                  maxLength: { value: 72, message: 'Máximo de 72 caracteres.' },
+                  pattern: {
+                    value: /^(?=.*[A-Za-z])(?=.*\d).+$/,
+                    message: 'A senha deve conter pelo menos uma letra e um número.',
+                  },
                 })}
               />
             </label>
@@ -275,9 +287,12 @@ function UsersPage() {
               {isSubmitting ? 'Salvando...' : 'Criar usuário'}
             </button>
           </form>
-          {(errors.name || errors.email || errors.password) && (
+          {(errors.name || errors.email || errors.password || createWorkDaysError) && (
             <p className={styles.fieldError}>
-              {errors.name?.message || errors.email?.message || errors.password?.message}
+              {errors.name?.message
+                || errors.email?.message
+                || errors.password?.message
+                || createWorkDaysError}
             </p>
           )}
         </section>
@@ -450,7 +465,11 @@ function UsersPage() {
             <form className={styles.form} onSubmit={handleSubmitEdit(onUpdate)}>
               <label htmlFor="editName">
                 Nome
-                <input id="editName" disabled={isSubmitting} {...registerEdit('name', { required: true })} />
+                <input
+                  id="editName"
+                  disabled={isSubmitting}
+                  {...registerEdit('name', { required: 'Informe o nome.' })}
+                />
               </label>
               {isAdmin && (
                 <label htmlFor="editRole">
@@ -511,6 +530,11 @@ function UsersPage() {
                 </button>
               </div>
             </form>
+            {(errorsEdit.name || editWorkDaysError) && (
+              <p className={styles.fieldError}>
+                {errorsEdit.name?.message || editWorkDaysError}
+              </p>
+            )}
           </section>
         )}
       </main>

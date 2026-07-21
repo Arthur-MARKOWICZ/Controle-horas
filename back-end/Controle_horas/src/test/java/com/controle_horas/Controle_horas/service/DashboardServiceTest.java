@@ -130,6 +130,7 @@ class DashboardServiceTest {
 
     @Test
     void getToday_shouldReturnExpectedExitAndBalances() {
+        user.setLunchEnabled(false);
         WorkLog morning = new WorkLog();
         morning.setEntryAt(Instant.parse("2026-07-14T11:30:00Z"));
         morning.close(Instant.parse("2026-07-14T15:30:00Z"), CloseReason.PAUSE);
@@ -152,6 +153,25 @@ class DashboardServiceTest {
         assertThat(response.balanceMinutesToday()).isEqualTo(-80);
         assertThat(response.hourBankMinutes()).isEqualTo(-80);
         assertThat(response.nextAction()).isEqualTo(DashboardService.NEXT_ACTION_ENTRY);
+    }
+
+    @Test
+    void getToday_shouldIncludeOpenSessionInWorkedMinutes() {
+        user.setLunchEnabled(false);
+        WorkLog open = new WorkLog();
+        open.setEntryAt(Instant.parse("2026-07-14T11:30:00Z"));
+
+        when(userService.findUser(user.getEmail())).thenReturn(user);
+        when(workLogRepository.findByUserIdAndEntryAtGreaterThanEqualAndEntryAtLessThanOrderByEntryAtAsc(
+                        eq(user.getId()), any(), any()))
+                .thenReturn(List.of(open));
+        when(workLogRepository.findByUserIdOrderByEntryAtAsc(user.getId())).thenReturn(List.of(open));
+
+        DashboardResponse response = dashboardService.getToday(user.getEmail());
+
+        assertThat(response.workedMinutesToday()).isEqualTo(30);
+        assertThat(response.balanceMinutesToday()).isEqualTo(-500);
+        assertThat(response.nextAction()).isEqualTo(DashboardService.NEXT_ACTION_PAUSE_OR_EXIT);
     }
 
     @Test

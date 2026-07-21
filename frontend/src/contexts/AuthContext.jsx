@@ -137,12 +137,20 @@ export function AuthProvider({ children }) {
     return response.data
   }, [persistSession])
 
-  const logout = useCallback(() => {
-    clearSession()
-    setIsSessionReady(true)
+  const logout = useCallback(async () => {
+    try {
+      await authService.logout()
+    } catch {
+      // Always clear local session even if the API call fails.
+    } finally {
+      clearSession()
+      setIsSessionReady(true)
+    }
   }, [clearSession])
 
   const canManageUsers = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+  const isAdmin = user?.role === 'ADMIN'
+  const isManager = user?.role === 'MANAGER'
 
   const value = useMemo(
     () => ({
@@ -150,15 +158,15 @@ export function AuthProvider({ children }) {
       user,
       isAuthenticated: Boolean(token),
       isSessionReady,
-      isAdmin: user?.role === 'ADMIN',
-      isManager: user?.role === 'MANAGER',
+      isAdmin,
+      isManager,
       canManageUsers,
       login,
       register,
       logout,
       refreshCurrentUser,
     }),
-    [token, user, isSessionReady, canManageUsers, login, register, logout, refreshCurrentUser],
+    [token, user, isSessionReady, isAdmin, isManager, canManageUsers, login, register, logout, refreshCurrentUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -19,7 +19,7 @@ export function useUsers() {
       }
       setUsers(response.data)
     } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Unable to load users'))
+      setError(await getErrorMessage(requestError, 'Unable to load users'))
     } finally {
       setIsLoading(false)
     }
@@ -42,7 +42,7 @@ export function useUsers() {
       await loadUsers()
       return true
     } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Unable to create user'))
+      setError(await getErrorMessage(requestError, 'Unable to create user'))
       return false
     } finally {
       setIsSubmitting(false)
@@ -62,7 +62,7 @@ export function useUsers() {
       await loadUsers()
       return true
     } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Unable to update user'))
+      setError(await getErrorMessage(requestError, 'Unable to update user'))
       return false
     } finally {
       setIsSubmitting(false)
@@ -82,7 +82,7 @@ export function useUsers() {
       await loadUsers()
       return true
     } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Unable to assign manager'))
+      setError(await getErrorMessage(requestError, 'Unable to assign manager'))
       return false
     } finally {
       setIsSubmitting(false)

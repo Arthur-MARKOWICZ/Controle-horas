@@ -10,9 +10,8 @@ export async function downloadTemplate(format) {
 export async function importWorkLogs(file) {
   const formData = new FormData()
   formData.append('file', file)
-  const response = await api.post('/api/migrations/import', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  // Do not set Content-Type manually — the browser must include the multipart boundary.
+  const response = await api.post('/api/migrations/import', formData)
   return response.data
 }
 
@@ -21,6 +20,10 @@ export function triggerBrowserDownload(blob, filename) {
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = filename
+  document.body.appendChild(anchor)
   anchor.click()
-  window.URL.revokeObjectURL(url)
+  anchor.remove()
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(url)
+  }, 1000)
 }

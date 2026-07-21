@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.controle_horas.Controle_horas.dto.HistoryDayResponse;
 import com.controle_horas.Controle_horas.dto.HistoryResponse;
+import com.controle_horas.Controle_horas.security.AuthRateLimitFilter;
 import com.controle_horas.Controle_horas.security.JwtAuthenticationFilter;
 import com.controle_horas.Controle_horas.service.HistoryExportService;
 import com.controle_horas.Controle_horas.service.HistoryService;
@@ -28,7 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
         controllers = HistoryController.class,
         excludeFilters = @ComponentScan.Filter(
                 type = FilterType.ASSIGNABLE_TYPE,
-                classes = JwtAuthenticationFilter.class))
+                classes = {JwtAuthenticationFilter.class, AuthRateLimitFilter.class}))
 class HistoryControllerTest {
 
     @Autowired

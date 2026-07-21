@@ -5,7 +5,7 @@ function ProtectedRoute() {
   const { isAuthenticated, isSessionReady } = useAuth()
 
   if (!isSessionReady) {
-    return null
+    return <p role="status">Carregando sessão...</p>
   }
 
   if (!isAuthenticated) {

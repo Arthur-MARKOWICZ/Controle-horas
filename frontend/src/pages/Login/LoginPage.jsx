@@ -26,7 +26,7 @@ function LoginPage() {
       await login(values)
       navigate('/', { replace: true })
     } catch (error) {
-      setSubmitError(getErrorMessage(error, 'Unable to login'))
+      setSubmitError(await getErrorMessage(error, 'Unable to login'))
     }
   }
 
@@ -67,9 +67,9 @@ function LoginPage() {
             aria-invalid={Boolean(errors.password)}
             {...register('password', {
               required: 'Senha é obrigatória',
-              minLength: {
-                value: 8,
-                message: 'A senha deve ter no mínimo 8 caracteres',
+              maxLength: {
+                value: 72,
+                message: 'A senha deve ter no máximo 72 caracteres',
               },
             })}
           />

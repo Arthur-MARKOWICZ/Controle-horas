@@ -27,7 +27,7 @@ function RegisterPage() {
       await registerUser(values)
       navigate('/', { replace: true })
     } catch (error) {
-      setSubmitError(getErrorMessage(error, 'Unable to register'))
+      setSubmitError(await getErrorMessage(error, 'Unable to register'))
     }
   }
 
@@ -99,6 +99,10 @@ function RegisterPage() {
               maxLength: {
                 value: 72,
                 message: 'A senha deve ter no máximo 72 caracteres',
+              },
+              pattern: {
+                value: /^(?=.*[A-Za-z])(?=.*\d).+$/,
+                message: 'A senha deve conter pelo menos uma letra e um número',
               },
             })}
           />

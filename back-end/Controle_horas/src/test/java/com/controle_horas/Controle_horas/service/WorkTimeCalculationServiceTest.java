@@ -90,6 +90,49 @@ class WorkTimeCalculationServiceTest {
     }
 
     @Test
+    void calculateExpectedExitAt_shouldIncludePlannedLunchWhenNotRegistered() {
+        WorkLog entry = openLog("2026-07-14T11:30:00Z");
+
+        Instant expectedExitAt = workTimeCalculationService.calculateExpectedExitAt(
+                List.of(entry), 470, true, 60);
+
+        assertThat(expectedExitAt).isEqualTo(Instant.parse("2026-07-14T20:20:00Z"));
+    }
+
+    @Test
+    void calculateExpectedExitAt_shouldNotDoubleCountLunchAfterRegistered() {
+        WorkLog morning = closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:00:00Z", CloseReason.LUNCH);
+        WorkLog afternoon = openLog("2026-07-14T16:00:00Z");
+
+        Instant expectedExitAt = workTimeCalculationService.calculateExpectedExitAt(
+                List.of(morning, afternoon), 470, true, 60);
+
+        assertThat(expectedExitAt).isEqualTo(Instant.parse("2026-07-14T20:20:00Z"));
+    }
+
+    @Test
+    void sumWorkedMinutesIncludingOpen_shouldAddOpenSession() {
+        List<WorkLog> workLogs = List.of(
+                closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:30:00Z", CloseReason.PAUSE),
+                openLog("2026-07-14T16:30:00Z"));
+
+        int workedMinutes = workTimeCalculationService.sumWorkedMinutesIncludingOpen(
+                workLogs, Instant.parse("2026-07-14T17:00:00Z"));
+
+        assertThat(workedMinutes).isEqualTo(270);
+    }
+
+    @Test
+    void sumClosedWorkedMinutesByDisplayDate_shouldSplitAcrossMidnight() {
+        WorkLog overnight = closedLog("2026-07-14T02:00:00Z", "2026-07-14T04:00:00Z", CloseReason.EXIT);
+
+        var minutesByDate = workTimeCalculationService.sumClosedWorkedMinutesByDisplayDate(List.of(overnight));
+
+        assertThat(minutesByDate.get(LocalDate.of(2026, 7, 13))).isEqualTo(60);
+        assertThat(minutesByDate.get(LocalDate.of(2026, 7, 14))).isEqualTo(60);
+    }
+
+    @Test
     void calculateHourBankMinutes_shouldIgnoreOpenJourney() {
         List<WorkLog> workLogs = List.of(
                 closedLog("2026-07-13T11:30:00Z", "2026-07-13T20:20:00Z", CloseReason.EXIT),
@@ -106,7 +149,7 @@ class WorkTimeCalculationServiceTest {
     }
 
     @Test
-    void calculateHourBankMinutes_shouldIgnorePausedDay() {
+    void calculateHourBankMinutes_shouldIncludePastIncompletePausedDay() {
         List<WorkLog> workLogs = List.of(
                 closedLog("2026-07-13T11:30:00Z", "2026-07-13T20:20:00Z", CloseReason.EXIT),
                 closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:00:00Z", CloseReason.PAUSE));
@@ -116,9 +159,10 @@ class WorkTimeCalculationServiceTest {
                 DAILY_WORKLOAD,
                 WEEKDAYS,
                 LocalDate.of(2026, 7, 13),
-                LocalDate.of(2026, 7, 14));
+                LocalDate.of(2026, 7, 15));
 
-        assertThat(hourBankMinutes).isZero();
+        // Day 13 exact workload = 0; day 14 incomplete past: 210 - 530 = -320
+        assertThat(hourBankMinutes).isEqualTo(-320);
     }
 
     @Test
@@ -191,7 +235,7 @@ class WorkTimeCalculationServiceTest {
     }
 
     @Test
-    void calculateHourBankMinutes_shouldIgnoreDayEndingInLunch() {
+    void calculateHourBankMinutes_shouldIncludePastDayEndingInLunch() {
         List<WorkLog> workLogs = List.of(
                 closedLog("2026-07-13T11:30:00Z", "2026-07-13T20:20:00Z", CloseReason.EXIT),
                 closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:00:00Z", CloseReason.LUNCH));
@@ -201,9 +245,28 @@ class WorkTimeCalculationServiceTest {
                 DAILY_WORKLOAD,
                 WEEKDAYS,
                 LocalDate.of(2026, 7, 13),
+                LocalDate.of(2026, 7, 15));
+
+        assertThat(hourBankMinutes).isEqualTo(-320);
+    }
+
+    @Test
+    void calculateHourBankMinutes_shouldAttributeMidnightSpilloverToNextDay() {
+        List<WorkLog> workLogs = List.of(
+                closedLog("2026-07-14T02:00:00Z", "2026-07-14T04:00:00Z", CloseReason.EXIT));
+
+        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
+                workLogs,
+                DAILY_WORKLOAD,
+                WEEKDAYS,
+                LocalDate.of(2026, 7, 13),
                 LocalDate.of(2026, 7, 14));
 
-        assertThat(hourBankMinutes).isZero();
+        // Day 13: 60 - 530 = -470; day 14 incomplete/today with spillover only via entry on 13 — day 14 has no entry logs
+        // Entry is 2026-07-14T02:00Z = 2026-07-13 23:00 BRT, exit 04:00Z = 01:00 BRT on 14th
+        // Day 13 complete (EXIT): 60 - 530 = -470
+        // Day 14: empty dayLogs but workedMinutes spillover 60, pastDay=false (today) → not counted
+        assertThat(hourBankMinutes).isEqualTo(60 - DAILY_WORKLOAD);
     }
 
     @Test

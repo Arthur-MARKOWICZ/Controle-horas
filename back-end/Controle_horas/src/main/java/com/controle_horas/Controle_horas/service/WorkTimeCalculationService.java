@@ -28,6 +28,32 @@ public class WorkTimeCalculationService {
                 .sum();
     }
 
+    public int sumWorkedMinutesIncludingOpen(List<WorkLog> workLogs, Instant now) {
+        int closedMinutes = sumClosedWorkedMinutes(workLogs);
+        int openMinutes = workLogs.stream()
+                .filter(workLog -> workLog.getExitAt() == null && workLog.getEntryAt() != null)
+                .mapToInt(workLog -> Math.max(
+                        0,
+                        Math.toIntExact(Duration.between(workLog.getEntryAt(), now).toMinutes())))
+                .sum();
+        return closedMinutes + openMinutes;
+    }
+
+    public int sumWorkedMinutesOnDate(List<WorkLog> workLogs, LocalDate date) {
+        return sumClosedWorkedMinutesByDisplayDate(workLogs).getOrDefault(date, 0);
+    }
+
+    public Map<LocalDate, Integer> sumClosedWorkedMinutesByDisplayDate(List<WorkLog> workLogs) {
+        Map<LocalDate, Integer> minutesByDate = new LinkedHashMap<>();
+        for (WorkLog workLog : workLogs) {
+            if (!isClosed(workLog) || workLog.getEntryAt() == null) {
+                continue;
+            }
+            addPartitionedMinutes(minutesByDate, workLog.getEntryAt(), workLog.getExitAt());
+        }
+        return minutesByDate;
+    }
+
     public boolean isWorkDay(LocalDate date, Set<DayOfWeek> workDays) {
         if (date == null || workDays == null || workDays.isEmpty()) {
             return false;
@@ -77,6 +103,14 @@ public class WorkTimeCalculationService {
     }
 
     public Instant calculateExpectedExitAt(List<WorkLog> dayWorkLogs, int dailyWorkloadMinutes) {
+        return calculateExpectedExitAt(dayWorkLogs, dailyWorkloadMinutes, false, 0);
+    }
+
+    public Instant calculateExpectedExitAt(
+            List<WorkLog> dayWorkLogs,
+            int dailyWorkloadMinutes,
+            boolean lunchEnabled,
+            int lunchDurationMinutes) {
         Instant firstEntry = dayWorkLogs.stream()
                 .map(WorkLog::getEntryAt)
                 .filter(Objects::nonNull)
@@ -88,9 +122,15 @@ public class WorkTimeCalculationService {
         }
 
         int pausedMinutes = sumPausedMinutes(dayWorkLogs);
+        int plannedLunchMinutes = 0;
+        if (lunchEnabled && lunchDurationMinutes > 0 && !hasLunchClose(dayWorkLogs)) {
+            plannedLunchMinutes = lunchDurationMinutes;
+        }
+
         return firstEntry
                 .plus(Duration.ofMinutes(dailyWorkloadMinutes))
-                .plus(Duration.ofMinutes(pausedMinutes));
+                .plus(Duration.ofMinutes(pausedMinutes))
+                .plus(Duration.ofMinutes(plannedLunchMinutes));
     }
 
     public Instant calculateExpectedExitAt(
@@ -98,8 +138,20 @@ public class WorkTimeCalculationService {
             LocalDate date,
             int dailyWorkloadMinutes,
             Set<DayOfWeek> workDays) {
+        return calculateExpectedExitAt(
+                dayWorkLogs, date, dailyWorkloadMinutes, workDays, false, 0);
+    }
+
+    public Instant calculateExpectedExitAt(
+            List<WorkLog> dayWorkLogs,
+            LocalDate date,
+            int dailyWorkloadMinutes,
+            Set<DayOfWeek> workDays,
+            boolean lunchEnabled,
+            int lunchDurationMinutes) {
         int effectiveWorkload = effectiveDailyWorkloadMinutes(date, dailyWorkloadMinutes, workDays);
-        return calculateExpectedExitAt(dayWorkLogs, effectiveWorkload);
+        return calculateExpectedExitAt(
+                dayWorkLogs, effectiveWorkload, lunchEnabled, lunchDurationMinutes);
     }
 
     public int calculateHourBankMinutes(
@@ -113,25 +165,31 @@ public class WorkTimeCalculationService {
         }
 
         Map<LocalDate, List<WorkLog>> logsByDate = groupByDisplayDate(allWorkLogs);
+        Map<LocalDate, Integer> workedMinutesByDate = sumClosedWorkedMinutesByDisplayDate(allWorkLogs);
         int hourBankMinutes = 0;
 
         for (LocalDate date = fromDate; !date.isAfter(untilDate); date = date.plusDays(1)) {
             List<WorkLog> dayLogs = logsByDate.getOrDefault(date, List.of());
             boolean pastDay = date.isBefore(untilDate);
             int effectiveWorkload = effectiveDailyWorkloadMinutes(date, dailyWorkloadMinutes, workDays);
+            int workedMinutes = workedMinutesByDate.getOrDefault(date, 0);
 
             if (dayLogs.isEmpty()) {
-                if (pastDay && effectiveWorkload > 0) {
+                if (workedMinutes > 0 && pastDay) {
+                    hourBankMinutes += calculateDailyBalanceMinutes(workedMinutes, effectiveWorkload);
+                } else if (pastDay && effectiveWorkload > 0) {
                     hourBankMinutes -= effectiveWorkload;
                 }
                 continue;
             }
 
             if (!isDayComplete(dayLogs)) {
+                if (pastDay) {
+                    hourBankMinutes += calculateDailyBalanceMinutes(workedMinutes, effectiveWorkload);
+                }
                 continue;
             }
 
-            int workedMinutes = sumClosedWorkedMinutes(dayLogs);
             hourBankMinutes += calculateDailyBalanceMinutes(workedMinutes, effectiveWorkload);
         }
 
@@ -172,6 +230,29 @@ public class WorkTimeCalculationService {
 
     public boolean isClosed(WorkLog workLog) {
         return workLog.getExitAt() != null;
+    }
+
+    private boolean hasLunchClose(List<WorkLog> dayWorkLogs) {
+        return dayWorkLogs.stream()
+                .map(WorkLog::getCloseReason)
+                .anyMatch(reason -> reason == CloseReason.LUNCH);
+    }
+
+    private void addPartitionedMinutes(
+            Map<LocalDate, Integer> minutesByDate,
+            Instant start,
+            Instant end) {
+        Instant cursor = start;
+        while (cursor.isBefore(end)) {
+            LocalDate date = toDisplayDate(cursor);
+            Instant nextMidnight = date.plusDays(1).atStartOfDay(DISPLAY_ZONE).toInstant();
+            Instant segmentEnd = end.isBefore(nextMidnight) ? end : nextMidnight;
+            int minutes = Math.toIntExact(Duration.between(cursor, segmentEnd).toMinutes());
+            if (minutes > 0) {
+                minutesByDate.merge(date, minutes, Integer::sum);
+            }
+            cursor = segmentEnd;
+        }
     }
 
     private int workedMinutes(WorkLog workLog) {

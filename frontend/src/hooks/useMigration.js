@@ -17,7 +17,7 @@ export function useMigration() {
       migrationService.triggerBrowserDownload(blob, `work-logs-template.${format}`)
       setMessage(`Modelo ${format.toUpperCase()} baixado.`)
     } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Unable to download template'))
+      setError(await getErrorMessage(requestError, 'Unable to download template'))
     } finally {
       setIsDownloading(false)
     }
@@ -37,7 +37,7 @@ export function useMigration() {
       setMessage(response.message)
       return true
     } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Unable to import file'))
+      setError(await getErrorMessage(requestError, 'Unable to import file'))
       return false
     } finally {
       setIsImporting(false)

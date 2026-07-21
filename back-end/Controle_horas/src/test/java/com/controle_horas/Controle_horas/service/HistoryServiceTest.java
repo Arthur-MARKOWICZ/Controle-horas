@@ -53,6 +53,16 @@ class HistoryServiceTest {
     }
 
     @Test
+    void getHistory_shouldRejectPeriodLongerThanMaxDays() {
+        assertThatThrownBy(() -> historyService.getHistory(
+                        user.getEmail(),
+                        LocalDate.of(2026, 1, 1),
+                        LocalDate.of(2026, 1, 1).plusDays(HistoryService.MAX_PERIOD_DAYS + 1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Period must be at most " + HistoryService.MAX_PERIOD_DAYS + " days");
+    }
+
+    @Test
     void getHistory_shouldReturnDailySummaryAndTotals() {
         WorkLog dayOne = closedLog("2026-07-13T11:30:00Z", "2026-07-13T21:00:00Z");
         WorkLog dayTwoMorning = closedLog("2026-07-14T11:30:00Z", "2026-07-14T15:30:00Z");
@@ -66,7 +76,7 @@ class HistoryServiceTest {
                 .thenReturn(List.of(dayOne, dayTwoMorning, dayTwoOpen));
 
         HistoryResponse response = historyService.getHistory(
-                user.getEmail(), LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31));
+                user.getEmail(), LocalDate.of(2026, 7, 13), LocalDate.of(2026, 7, 31));
 
         assertThat(response.days()).hasSize(2);
         assertThat(response.days().get(0).workedMinutes()).isEqualTo(570);
