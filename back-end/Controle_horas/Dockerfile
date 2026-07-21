@@ -1,11 +1,17 @@
+# Build from repository root:
+#   docker build -f back-end/Controle_horas/Dockerfile -t controle-horas-backend .
+#
+# On Render: Dockerfile Path = back-end/Controle_horas/Dockerfile
+#            Root Directory  = (empty / repository root)
+
 # Build
 FROM maven:3.9.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
-COPY pom.xml .
+COPY back-end/Controle_horas/pom.xml .
 RUN mvn -B dependency:go-offline
 
-COPY src ./src
+COPY back-end/Controle_horas/src ./src
 RUN mvn -B -DskipTests package
 
 # Runtime
