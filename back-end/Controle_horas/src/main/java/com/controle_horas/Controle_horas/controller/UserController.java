@@ -14,6 +14,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@Tag(name = "Perfil de Usuário", description = "Endpoints para consultar e atualizar os dados do próprio usuário")
 @RestController
 @RequestMapping("/api/users/me")
 public class UserController {
@@ -24,6 +28,7 @@ public class UserController {
         this.userService = userService;
     }
 
+    @Operation(summary = "Obter usuário atual", description = "Retorna os dados do perfil do usuário autenticado")
     @GetMapping
     public ResponseEntity<ApiResponse<CurrentUserResponse>> getCurrentUser(Principal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
@@ -31,6 +36,7 @@ public class UserController {
                 userService.getCurrentUser(principal.getName())));
     }
 
+    @Operation(summary = "Atualizar jornada de trabalho diária", description = "Altera os horários padrão de entrada, saída, almoço e dias de trabalho do usuário")
     @PutMapping("/daily-workload")
     public ResponseEntity<ApiResponse<DailyWorkloadResponse>> updateDailyWorkload(
             Principal principal, @Valid @RequestBody DailyWorkloadRequest request) {

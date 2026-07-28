@@ -9,6 +9,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@Tag(name = "Registro de Ponto", description = "Endpoints para marcar entrada, pausa, almoço, retorno e saída")
 @RestController
 @RequestMapping("/api/work-logs")
 public class WorkLogController {
@@ -19,6 +23,7 @@ public class WorkLogController {
         this.dashboardService = dashboardService;
     }
 
+    @Operation(summary = "Registrar entrada", description = "Marca o início da jornada de trabalho do dia")
     @PostMapping("/entry")
     public ResponseEntity<ApiResponse<DashboardResponse>> registerEntry(Principal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
@@ -26,6 +31,7 @@ public class WorkLogController {
                 dashboardService.registerEntry(principal.getName())));
     }
 
+    @Operation(summary = "Registrar pausa", description = "Inicia uma pausa curta no expediente")
     @PostMapping("/pause")
     public ResponseEntity<ApiResponse<DashboardResponse>> registerPause(Principal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
@@ -33,6 +39,7 @@ public class WorkLogController {
                 dashboardService.registerPause(principal.getName())));
     }
 
+    @Operation(summary = "Registrar almoço", description = "Inicia o horário de almoço/refeição")
     @PostMapping("/lunch")
     public ResponseEntity<ApiResponse<DashboardResponse>> registerLunch(Principal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
@@ -40,6 +47,7 @@ public class WorkLogController {
                 dashboardService.registerLunch(principal.getName())));
     }
 
+    @Operation(summary = "Registrar retorno", description = "Finaliza a pausa ou almoço e retoma o trabalho")
     @PostMapping("/resume")
     public ResponseEntity<ApiResponse<DashboardResponse>> registerResume(Principal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
@@ -47,6 +55,7 @@ public class WorkLogController {
                 dashboardService.registerResume(principal.getName())));
     }
 
+    @Operation(summary = "Registrar saída", description = "Encerra o expediente de trabalho do dia")
     @PostMapping("/exit")
     public ResponseEntity<ApiResponse<DashboardResponse>> registerExit(Principal principal) {
         return ResponseEntity.ok(ApiResponse.ok(

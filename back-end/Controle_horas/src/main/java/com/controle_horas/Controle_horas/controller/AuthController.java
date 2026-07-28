@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@Tag(name = "Autenticação", description = "Endpoints para registro, login e logout de usuários")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -25,6 +29,7 @@ public class AuthController {
         this.authService = authService;
     }
 
+    @Operation(summary = "Registrar novo usuário", description = "Cria uma nova conta de usuário no sistema")
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
         AuthResponse data = authService.register(request);
@@ -32,12 +37,14 @@ public class AuthController {
                 .body(ApiResponse.ok("User registered successfully", data));
     }
 
+    @Operation(summary = "Realizar login", description = "Autentica um usuário e retorna o token JWT de acesso")
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse data = authService.login(request);
         return ResponseEntity.ok(ApiResponse.ok("Login successful", data));
     }
 
+    @Operation(summary = "Realizar logout", description = "Invalida a sessão/token do usuário")
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader) {

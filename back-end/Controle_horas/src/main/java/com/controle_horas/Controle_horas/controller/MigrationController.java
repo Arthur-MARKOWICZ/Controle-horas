@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@Tag(name = "Migração e Importação (Admin)", description = "Endpoints para download de templates e importação de registros de ponto via arquivo CSV/XLSX")
 @RestController
 @RequestMapping("/api/migrations")
 @PreAuthorize("hasRole('ADMIN')")
@@ -26,6 +30,7 @@ public class MigrationController {
         this.workLogImportService = workLogImportService;
     }
 
+    @Operation(summary = "Baixar template CSV", description = "Download do modelo de arquivo CSV para importação de pontos")
     @GetMapping("/template.csv")
     public ResponseEntity<byte[]> downloadCsvTemplate() {
         byte[] content = workLogImportService.buildCsvTemplate();
@@ -35,6 +40,7 @@ public class MigrationController {
                 .body(content);
     }
 
+    @Operation(summary = "Baixar template XLSX", description = "Download do modelo de planilha Excel (.xlsx) para importação de pontos")
     @GetMapping("/template.xlsx")
     public ResponseEntity<byte[]> downloadXlsxTemplate() {
         byte[] content = workLogImportService.buildXlsxTemplate();
@@ -45,6 +51,7 @@ public class MigrationController {
                 .body(content);
     }
 
+    @Operation(summary = "Importar arquivo de pontos", description = "Realiza a leitura e carga em lote de registros de ponto a partir de arquivo CSV ou XLSX")
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<WorkLogImportResponse>> importWorkLogs(
             Principal principal,

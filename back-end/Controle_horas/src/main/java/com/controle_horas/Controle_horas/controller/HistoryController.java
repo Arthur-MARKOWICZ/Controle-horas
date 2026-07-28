@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@Tag(name = "Histórico e Relatórios", description = "Endpoints para consulta de histórico e exportação em Excel e PDF")
 @RestController
 @RequestMapping("/api/history")
 public class HistoryController {
@@ -27,6 +31,7 @@ public class HistoryController {
         this.historyExportService = historyExportService;
     }
 
+    @Operation(summary = "Consultar histórico de registros", description = "Retorna o histórico de ponto e saldo de horas em um intervalo de datas")
     @GetMapping
     public ResponseEntity<ApiResponse<HistoryResponse>> getHistory(
             Principal principal,
@@ -36,6 +41,7 @@ public class HistoryController {
         return ResponseEntity.ok(ApiResponse.ok("History retrieved successfully", history));
     }
 
+    @Operation(summary = "Exportar histórico em Excel (.xlsx)", description = "Gera um relatório em planilha Excel para o período selecionado")
     @GetMapping("/export.xlsx")
     public ResponseEntity<byte[]> exportExcel(
             Principal principal,
@@ -49,6 +55,7 @@ public class HistoryController {
                 .body(content);
     }
 
+    @Operation(summary = "Exportar histórico em PDF (.pdf)", description = "Gera um documento PDF com o relatório detalhado do histórico")
     @GetMapping("/export.pdf")
     public ResponseEntity<byte[]> exportPdf(
             Principal principal,

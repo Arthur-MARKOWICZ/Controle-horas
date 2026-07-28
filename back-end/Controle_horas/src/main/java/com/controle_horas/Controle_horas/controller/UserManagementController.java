@@ -30,6 +30,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@Tag(name = "Gestão de Usuários (Admin/Manager)", description = "Endpoints para gerenciamento de usuários, atribuição de gestor e visualização de dashboards/históricos de subordinados")
 @RestController
 @RequestMapping("/api/users")
 @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
@@ -51,6 +55,7 @@ public class UserManagementController {
         this.historyService = historyService;
     }
 
+    @Operation(summary = "Listar usuários acessíveis", description = "Retorna a lista de usuários que o gestor/admin possui permissão para visualizar")
     @GetMapping
     public ResponseEntity<ApiResponse<List<UserResponse>>> listUsers(Principal principal) {
         return ResponseEntity.ok(ApiResponse.ok(
@@ -58,6 +63,7 @@ public class UserManagementController {
                 userManagementService.listUsers(principal.getName())));
     }
 
+    @Operation(summary = "Criar novo usuário", description = "Cadastra um novo usuário no sistema com perfil e gestor associado")
     @PostMapping
     public ResponseEntity<ApiResponse<UserResponse>> createUser(
             Principal principal,
@@ -67,6 +73,7 @@ public class UserManagementController {
                 userManagementService.createUser(principal.getName(), request)));
     }
 
+    @Operation(summary = "Atualizar usuário", description = "Atualiza os dados cadastrais de um determinado usuário")
     @PutMapping("/{userId}")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
             Principal principal,
@@ -77,6 +84,7 @@ public class UserManagementController {
                 userManagementService.updateUser(principal.getName(), userId, request)));
     }
 
+    @Operation(summary = "Atribuir gestor (Admin)", description = "Associa um gestor responsável a um usuário")
     @PutMapping("/{userId}/manager")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> assignManager(
@@ -88,6 +96,7 @@ public class UserManagementController {
                 userManagementService.assignManager(principal.getName(), userId, request)));
     }
 
+    @Operation(summary = "Consultar dashboard de usuário", description = "Visualiza o dashboard do dia de um usuário subordinado")
     @GetMapping("/{userId}/dashboard")
     public ResponseEntity<ApiResponse<DashboardResponse>> getUserDashboard(
             Principal principal,
@@ -99,6 +108,7 @@ public class UserManagementController {
                 dashboardService.getToday(target.getEmail())));
     }
 
+    @Operation(summary = "Consultar histórico de usuário", description = "Visualiza o histórico de ponto de um usuário subordinado por período")
     @GetMapping("/{userId}/history")
     public ResponseEntity<ApiResponse<HistoryResponse>> getUserHistory(
             Principal principal,
