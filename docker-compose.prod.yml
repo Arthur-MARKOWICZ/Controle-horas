@@ -1,0 +1,52 @@
+name: controle_horas_prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: controle_horas_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-controle_horas}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      # Exposes database only to localhost on the VM for security
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-controle_horas}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - controle_horas_net
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/controle_horas_backend:latest}
+    container_name: controle_horas_backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-controle_horas}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+      HSTS_ENABLED: ${HSTS_ENABLED:-true}
+      SERVER_PORT: 8080
+    networks:
+      - controle_horas_net
+
+networks:
+  controle_horas_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

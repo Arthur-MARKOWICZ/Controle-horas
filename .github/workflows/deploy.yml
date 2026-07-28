@@ -1,0 +1,111 @@
+name: Deploy Backend & Database to Oracle Cloud VM
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'back-end/**'
+      - 'banco_de_dados/**'
+      - 'Dockerfile.backend'
+      - 'docker-compose.prod.yml'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push-backend:
+    name: Build & Push Backend Image to GHCR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Format repository name to lowercase
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository }}/backend"
+          echo "IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Build and push Backend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-to-oracle-vm:
+    name: Deploy to Oracle Cloud VM via SSH
+    needs: build-and-push-backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Format repository name to lowercase
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository }}/backend"
+          echo "IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Copy docker-compose.prod.yml to Oracle VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_VM_HOST }}
+          username: ${{ secrets.OCI_VM_USER }}
+          key: ${{ secrets.OCI_VM_KEY }}
+          port: ${{ secrets.OCI_VM_PORT || 22 }}
+          source: "docker-compose.prod.yml"
+          target: "~/controle-horas"
+
+      - name: Deploy application via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_VM_HOST }}
+          username: ${{ secrets.OCI_VM_USER }}
+          key: ${{ secrets.OCI_VM_KEY }}
+          port: ${{ secrets.OCI_VM_PORT || 22 }}
+          script: |
+            set -e
+            cd ~/controle-horas
+
+            # Log in to GHCR to pull private images if needed
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # Generate .env file dynamically from GitHub Secrets
+            cat << 'EOF' > .env
+            BACKEND_IMAGE=${{ env.IMAGE_NAME }}:latest
+            POSTGRES_DB=${{ secrets.POSTGRES_DB || 'controle_horas' }}
+            POSTGRES_USER=${{ secrets.POSTGRES_USER || 'postgres' }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRATION_MS=${{ secrets.JWT_EXPIRATION_MS || '3600000' }}
+            CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS || '*' }}
+            SERVER_PORT=${{ secrets.SERVER_PORT || '8080' }}
+            EOF
+
+            # Pull latest containers and start services
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Clean up dangling images
+            docker image prune -f

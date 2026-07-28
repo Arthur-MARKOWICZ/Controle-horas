@@ -45,7 +45,7 @@ Frontend
 
 Backend
 
-- Render
+- oracle cloud
 
 Versionamento
 
@@ -260,8 +260,8 @@ versao 4
 - deploy automatico
 - prepara o deploy
     - front : cloudflare
-    - back: render
-    - banco: neon postgres
+    - back: oracle cloud
+    - banco: oracle cloud
 
 ---
 
