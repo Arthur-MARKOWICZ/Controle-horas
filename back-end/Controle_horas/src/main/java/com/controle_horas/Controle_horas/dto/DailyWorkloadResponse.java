@@ -1,6 +1,7 @@
 package com.controle_horas.Controle_horas.dto;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Set;
 
@@ -10,5 +11,6 @@ public record DailyWorkloadResponse(
         LocalTime standardExitTime,
         boolean lunchEnabled,
         int lunchDurationMinutes,
-        Set<DayOfWeek> workDays
+        Set<DayOfWeek> workDays,
+        LocalDate workStartDate
 ) {}

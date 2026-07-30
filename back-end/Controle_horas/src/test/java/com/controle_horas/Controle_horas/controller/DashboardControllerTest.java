@@ -48,6 +48,7 @@ class DashboardControllerTest {
         when(dashboardService.getToday("arthur@example.com"))
                 .thenReturn(new DashboardResponse(
                         LocalDate.of(2026, 7, 14),
+                        null,
                         470,
                         LocalTime.of(8, 30),
                         LocalTime.of(17, 20),

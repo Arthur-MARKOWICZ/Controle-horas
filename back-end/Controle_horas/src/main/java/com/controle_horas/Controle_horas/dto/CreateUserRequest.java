@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Set;
 import java.util.UUID;
@@ -32,6 +33,8 @@ public record CreateUserRequest(
         String role,
 
         UUID managerId,
+
+        LocalDate workStartDate,
 
         LocalTime standardEntryTime,
 

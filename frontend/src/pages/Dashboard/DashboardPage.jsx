@@ -86,10 +86,23 @@ function DashboardPage() {
 
   const nextAction = dashboard.nextAction
   const showLunchAction = dashboard.lunchEnabled === true
+  const scheduleConfigured = dashboard.scheduleConfigured === true
 
   return (
     <MainLayout>
       <main className={styles.page}>
+        {!scheduleConfigured && (
+          <section className={styles.notificationBanner} role="alert">
+            <p className={styles.notificationText}>
+              Sua jornada de trabalho ainda não foi configurada. Defina horários,
+              dias de trabalho e almoço para começar a usar o sistema.
+            </p>
+            <Link className={styles.notificationButton} to="/settings/schedule">
+              Configurar jornada
+            </Link>
+          </section>
+        )}
+
         <p className={styles.date}>{formatDisplayDate(dashboard.date)}</p>
 
         <section className={styles.summaryGrid} aria-label="Resumo do dia">
@@ -120,7 +133,17 @@ function DashboardPage() {
         <section className={styles.grid} aria-label="Registro de ponto">
           <article className={styles.card}>
             <h2>Registro de ponto</h2>
-            {nextAction === 'ENTRY' && (
+            {!scheduleConfigured && (
+              <>
+                <p className={styles.description}>
+                  Configure sua jornada de trabalho antes de registrar o ponto.
+                </p>
+                <button className={styles.actionButton} type="button" disabled>
+                  Configurar jornada primeiro
+                </button>
+              </>
+            )}
+            {scheduleConfigured && nextAction === 'ENTRY' && (
               <>
                 <p className={styles.description}>Você não possui uma jornada aberta.</p>
                 <button className={styles.actionButton} type="button" onClick={registerEntry} disabled={isSubmitting}>
@@ -128,7 +151,7 @@ function DashboardPage() {
                 </button>
               </>
             )}
-            {nextAction === 'PAUSE_OR_EXIT' && (
+            {scheduleConfigured && nextAction === 'PAUSE_OR_EXIT' && (
               <>
                 <p className={styles.description}>Sua entrada está em andamento.</p>
                 <div className={styles.actionGroup}>
@@ -146,7 +169,7 @@ function DashboardPage() {
                 </div>
               </>
             )}
-            {nextAction === 'RESUME' && (
+            {scheduleConfigured && nextAction === 'RESUME' && (
               <>
                 <p className={styles.description}>Você está em pausa ou almoço.</p>
                 <button className={styles.actionButton} type="button" onClick={registerResume} disabled={isSubmitting}>
@@ -158,39 +181,49 @@ function DashboardPage() {
 
           <article className={styles.card}>
             <h2>Horário padrão</h2>
-            <p className={styles.description}>
-              Ajuste entrada e saída. Carga atual: {formatWorkload(dashboard.dailyWorkloadMinutes)}.
-              {' '}
-              <Link className={styles.settingsLink} to="/settings/schedule">Editar jornada completa</Link>
-            </p>
-            <form className={styles.workloadForm} onSubmit={handleSubmit(onSubmitWorkload)}>
-              <div className={styles.timeFields}>
-                <label htmlFor="standardEntryTime">
-                  Entrada
-                  <input
-                    id="standardEntryTime"
-                    type="time"
-                    disabled={isSubmitting}
-                    {...registerField('standardEntryTime', { required: 'Informe o horário de entrada.' })}
-                  />
-                </label>
-                <label htmlFor="standardExitTime">
-                  Saída
-                  <input
-                    id="standardExitTime"
-                    type="time"
-                    disabled={isSubmitting}
-                    {...registerField('standardExitTime', { required: 'Informe o horário de saída.' })}
-                  />
-                </label>
-              </div>
-              <button type="submit" disabled={isSubmitting}>Salvar</button>
-              {(errors.standardEntryTime || errors.standardExitTime) && (
-                <p className={styles.fieldError}>
-                  {errors.standardEntryTime?.message || errors.standardExitTime?.message}
+            {scheduleConfigured ? (
+              <>
+                <p className={styles.description}>
+                  Ajuste entrada e saída. Carga atual: {formatWorkload(dashboard.dailyWorkloadMinutes)}.
+                  {' '}
+                  <Link className={styles.settingsLink} to="/settings/schedule">Editar jornada completa</Link>
                 </p>
-              )}
-            </form>
+                <form className={styles.workloadForm} onSubmit={handleSubmit(onSubmitWorkload)}>
+                  <div className={styles.timeFields}>
+                    <label htmlFor="standardEntryTime">
+                      Entrada
+                      <input
+                        id="standardEntryTime"
+                        type="time"
+                        disabled={isSubmitting}
+                        {...registerField('standardEntryTime', { required: 'Informe o horário de entrada.' })}
+                      />
+                    </label>
+                    <label htmlFor="standardExitTime">
+                      Saída
+                      <input
+                        id="standardExitTime"
+                        type="time"
+                        disabled={isSubmitting}
+                        {...registerField('standardExitTime', { required: 'Informe o horário de saída.' })}
+                      />
+                    </label>
+                  </div>
+                  <button type="submit" disabled={isSubmitting}>Salvar</button>
+                  {(errors.standardEntryTime || errors.standardExitTime) && (
+                    <p className={styles.fieldError}>
+                      {errors.standardEntryTime?.message || errors.standardExitTime?.message}
+                    </p>
+                  )}
+                </form>
+              </>
+            ) : (
+              <p className={styles.description}>
+                Configure sua jornada completa para definir horários, dias de trabalho e almoço.
+                {' '}
+                <Link className={styles.settingsLink} to="/settings/schedule">Configurar jornada</Link>
+              </p>
+            )}
           </article>
         </section>
 

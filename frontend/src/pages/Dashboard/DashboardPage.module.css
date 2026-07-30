@@ -159,6 +159,44 @@ input:disabled {
   min-height: 2.75rem;
 }
 
+.notificationBanner {
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.notificationText {
+  margin: 0;
+  color: var(--color-warning-text);
+  font-weight: 600;
+  flex: 1;
+  min-width: 12rem;
+}
+
+.notificationButton {
+  display: inline-block;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-text);
+  color: var(--color-warning-bg);
+  padding: 0.65rem 1.25rem;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.notificationButton:hover {
+  opacity: 0.9;
+}
+
 .fieldError,
 .error {
   color: var(--color-danger);

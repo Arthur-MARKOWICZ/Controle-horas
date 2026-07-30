@@ -4,8 +4,10 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 .env
+.env.example
 .env.local
 .env.*.local
+.trae/*
 ### STS ###
 .apt_generated
 .classpath

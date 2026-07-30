@@ -49,6 +49,7 @@ function UsersPage() {
       standardExitTime: '17:20',
       lunchEnabled: true,
       lunchDurationMinutes: 60,
+      workStartDate: '',
     },
   })
 
@@ -77,6 +78,7 @@ function UsersPage() {
       name: user.name,
       role: user.role,
       managerId: user.managerId || '',
+      workStartDate: user.workStartDate || '',
       standardEntryTime: formatTimeInput(user.standardEntryTime),
       standardExitTime: formatTimeInput(user.standardExitTime),
       lunchEnabled: user.lunchEnabled ?? true,
@@ -121,6 +123,7 @@ function UsersPage() {
       managerId: isAdmin
         ? (values.managerId || currentUser?.userId || null)
         : null,
+      workStartDate: values.workStartDate || null,
       standardEntryTime: values.standardEntryTime,
       standardExitTime: values.standardExitTime,
       lunchEnabled: Boolean(values.lunchEnabled),
@@ -138,6 +141,7 @@ function UsersPage() {
         standardExitTime: '17:20',
         lunchEnabled: true,
         lunchDurationMinutes: 60,
+        workStartDate: '',
       })
       setCreateWorkDays(DEFAULT_WORK_DAYS)
     }
@@ -155,6 +159,7 @@ function UsersPage() {
       name: values.name,
       role: isAdmin ? values.role : undefined,
       managerId: isAdmin && values.managerId ? values.managerId : undefined,
+      workStartDate: values.workStartDate || null,
       standardEntryTime: values.standardEntryTime,
       standardExitTime: values.standardExitTime,
       lunchEnabled: Boolean(values.lunchEnabled),
@@ -275,6 +280,15 @@ function UsersPage() {
                   min: { value: 0, message: 'Mínimo de 0 minutos.' },
                   max: { value: 240, message: 'Máximo de 240 minutos.' },
                 })}
+              />
+            </label>
+            <label htmlFor="workStartDate">
+              Data de início
+              <input
+                id="workStartDate"
+                type="date"
+                disabled={isSubmitting}
+                {...register('workStartDate')}
               />
             </label>
             <WorkDaysField
@@ -515,6 +529,15 @@ function UsersPage() {
                   max="240"
                   disabled={isSubmitting || !editLunchEnabled}
                   {...registerEdit('lunchDurationMinutes', { valueAsNumber: true })}
+                />
+              </label>
+              <label htmlFor="editWorkStartDate">
+                Data de início
+                <input
+                  id="editWorkStartDate"
+                  type="date"
+                  disabled={isSubmitting}
+                  {...registerEdit('workStartDate')}
                 />
               </label>
               <WorkDaysField

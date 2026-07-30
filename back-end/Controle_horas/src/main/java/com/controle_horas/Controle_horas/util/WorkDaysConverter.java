@@ -5,6 +5,7 @@ import jakarta.persistence.Converter;
 import java.time.DayOfWeek;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -22,8 +23,10 @@ public class WorkDaysConverter implements AttributeConverter<Set<DayOfWeek>, Str
 
     @Override
     public String convertToDatabaseColumn(Set<DayOfWeek> attribute) {
-        Set<DayOfWeek> workDays = normalize(attribute);
-        return workDays.stream()
+        if (attribute == null || attribute.isEmpty()) {
+            return null;
+        }
+        return attribute.stream()
                 .sorted()
                 .map(DayOfWeek::name)
                 .collect(Collectors.joining(","));
@@ -32,7 +35,7 @@ public class WorkDaysConverter implements AttributeConverter<Set<DayOfWeek>, Str
     @Override
     public Set<DayOfWeek> convertToEntityAttribute(String databaseValue) {
         if (databaseValue == null || databaseValue.isBlank()) {
-            return EnumSet.copyOf(DEFAULT_WORK_DAYS);
+            return Collections.emptySet();
         }
         return Arrays.stream(databaseValue.split(","))
                 .map(String::trim)
@@ -43,7 +46,7 @@ public class WorkDaysConverter implements AttributeConverter<Set<DayOfWeek>, Str
 
     public static Set<DayOfWeek> normalize(Collection<DayOfWeek> workDays) {
         if (workDays == null || workDays.isEmpty()) {
-            throw new IllegalArgumentException("At least one work day must be selected");
+            return Collections.emptySet();
         }
         return EnumSet.copyOf(new LinkedHashSet<>(workDays));
     }

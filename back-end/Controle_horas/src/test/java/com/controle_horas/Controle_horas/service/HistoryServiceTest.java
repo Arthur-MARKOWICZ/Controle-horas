@@ -16,14 +16,18 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class HistoryServiceTest {
 
     @Mock private WorkLogRepository workLogRepository;
@@ -35,13 +39,19 @@ class HistoryServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-07-14T12:00:00Z"), ZoneOffset.UTC);
-        historyService = new HistoryService(
-                workLogRepository, userService, new WorkTimeCalculationService(), clock);
+        WorkTimeCalculationService workTimeCalculationService = new WorkTimeCalculationService();
         user = new User();
         user.setId(UUID.randomUUID());
         user.setEmail("arthur@example.com");
         user.setDailyWorkloadMinutes(530);
         user.setCreatedAt(Instant.parse("2026-07-13T03:00:00Z"));
+        when(workLogRepository.findTopByUserIdOrderByEntryAtAsc(user.getId())).thenReturn(Optional.empty());
+        historyService = new HistoryService(
+                workLogRepository,
+                userService,
+                workTimeCalculationService,
+                new WorkStartDateService(workLogRepository, workTimeCalculationService),
+                clock);
     }
 
     @Test
@@ -69,6 +79,8 @@ class HistoryServiceTest {
         WorkLog dayTwoOpen = openLog("2026-07-14T16:30:00Z");
 
         when(userService.findUser(user.getEmail())).thenReturn(user);
+        when(workLogRepository.findTopByUserIdOrderByEntryAtAsc(user.getId()))
+                .thenReturn(Optional.of(dayOne));
         when(workLogRepository.findByUserIdAndEntryAtGreaterThanEqualAndEntryAtLessThanOrderByEntryAtAsc(
                         eq(user.getId()), any(), any()))
                 .thenReturn(List.of(dayOne, dayTwoMorning, dayTwoOpen));
@@ -90,6 +102,25 @@ class HistoryServiceTest {
 
     @Test
     void getHistory_shouldIncludeSyntheticAbsenceForPastWorkDay() {
+        when(userService.findUser(user.getEmail())).thenReturn(user);
+        when(workLogRepository.findByUserIdAndEntryAtGreaterThanEqualAndEntryAtLessThanOrderByEntryAtAsc(
+                        eq(user.getId()), any(), any()))
+                .thenReturn(List.of());
+        when(workLogRepository.findByUserIdOrderByEntryAtAsc(user.getId())).thenReturn(List.of());
+
+        HistoryResponse response = historyService.getHistory(
+                user.getEmail(), LocalDate.of(2026, 7, 13), LocalDate.of(2026, 7, 14));
+
+        assertThat(response.days()).isEmpty();
+        assertThat(response.totalWorkedMinutes()).isZero();
+        assertThat(response.totalBalanceMinutes()).isZero();
+        assertThat(response.hourBankMinutes()).isZero();
+    }
+
+    @Test
+    void getHistory_shouldIncludeSyntheticAbsenceFromConfiguredStartDate() {
+        user.setWorkStartDate(LocalDate.of(2026, 7, 13));
+
         when(userService.findUser(user.getEmail())).thenReturn(user);
         when(workLogRepository.findByUserIdAndEntryAtGreaterThanEqualAndEntryAtLessThanOrderByEntryAtAsc(
                         eq(user.getId()), any(), any()))

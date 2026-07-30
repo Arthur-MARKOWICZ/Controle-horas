@@ -62,7 +62,7 @@ public class WorkTimeCalculationService {
     }
 
     public int effectiveDailyWorkloadMinutes(LocalDate date, int dailyWorkloadMinutes, Set<DayOfWeek> workDays) {
-        if (!isWorkDay(date, workDays)) {
+        if (dailyWorkloadMinutes <= 0 || !isWorkDay(date, workDays)) {
             return 0;
         }
         return dailyWorkloadMinutes;
@@ -160,7 +160,7 @@ public class WorkTimeCalculationService {
             Set<DayOfWeek> workDays,
             LocalDate fromDate,
             LocalDate untilDate) {
-        if (fromDate == null || untilDate == null || fromDate.isAfter(untilDate)) {
+        if (fromDate == null || untilDate == null || fromDate.isAfter(untilDate) || dailyWorkloadMinutes <= 0) {
             return 0;
         }
 

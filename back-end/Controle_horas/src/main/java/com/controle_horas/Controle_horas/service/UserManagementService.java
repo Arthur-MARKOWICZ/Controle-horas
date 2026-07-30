@@ -64,6 +64,7 @@ public class UserManagementService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(requestedRole);
         user.setCreatedBy(actor);
+        user.setWorkStartDate(request.workStartDate());
 
         applySchedule(
                 user,
@@ -84,6 +85,7 @@ public class UserManagementService {
         User target = accessControlService.requireAccessibleUser(actor, userId);
 
         target.setName(request.name().trim());
+        target.setWorkStartDate(request.workStartDate());
 
         if (request.role() != null && !request.role().isBlank()) {
             UserRole newRole = parseRole(request.role());
@@ -191,7 +193,7 @@ public class UserManagementService {
         Set<DayOfWeek> selectedWorkDays = workDays != null
                 ? WorkDaysConverter.normalize(workDays)
                 : user.getWorkDays();
-        if (!standardExit.isAfter(standardEntry)) {
+        if (standardEntry != null && standardExit != null && !standardExit.isAfter(standardEntry)) {
             throw new IllegalArgumentException("Standard exit time must be after standard entry time");
         }
         user.updateWorkSchedule(standardEntry, standardExit, enabled, duration, selectedWorkDays);
@@ -222,6 +224,7 @@ public class UserManagementService {
                 manager != null ? manager.getId() : null,
                 manager != null ? manager.getName() : null,
                 createdBy != null ? createdBy.getId() : null,
+                user.getWorkStartDate(),
                 user.getDailyWorkloadMinutes(),
                 user.getStandardEntryTime(),
                 user.getStandardExitTime(),

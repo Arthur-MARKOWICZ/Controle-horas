@@ -6,6 +6,7 @@ import com.controle_horas.Controle_horas.entity.User;
 import com.controle_horas.Controle_horas.repository.UserRepository;
 import com.controle_horas.Controle_horas.util.WorkDaysConverter;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Set;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -38,7 +39,8 @@ public class UserService {
             LocalTime standardExitTime,
             boolean lunchEnabled,
             int lunchDurationMinutes,
-            Set<DayOfWeek> workDays) {
+            Set<DayOfWeek> workDays,
+            LocalDate workStartDate) {
         if (!standardExitTime.isAfter(standardEntryTime)) {
             throw new IllegalArgumentException("Standard exit time must be after standard entry time");
         }
@@ -50,13 +52,15 @@ public class UserService {
                 lunchEnabled,
                 lunchDurationMinutes,
                 normalizedWorkDays);
+        user.setWorkStartDate(workStartDate);
         return new DailyWorkloadResponse(
                 user.getDailyWorkloadMinutes(),
                 user.getStandardEntryTime(),
                 user.getStandardExitTime(),
                 user.isLunchEnabled(),
                 user.getLunchDurationMinutes(),
-                user.getWorkDays());
+                user.getWorkDays(),
+                user.getWorkStartDate());
     }
 
     @Transactional(readOnly = true)

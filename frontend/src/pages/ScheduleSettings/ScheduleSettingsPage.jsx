@@ -38,6 +38,7 @@ function ScheduleSettingsPage() {
       standardExitTime: formatTimeInput(dashboard.standardExitTime),
       lunchEnabled: dashboard.lunchEnabled ?? true,
       lunchDurationMinutes: dashboard.lunchDurationMinutes ?? 60,
+      workStartDate: dashboard.workStartDate || '',
     })
     setWorkDays(normalizeWorkDays(dashboard.workDays))
   }, [dashboard, reset])
@@ -55,6 +56,7 @@ function ScheduleSettingsPage() {
       lunchEnabled: Boolean(values.lunchEnabled),
       lunchDurationMinutes: Number(values.lunchDurationMinutes),
       workDays: selectedWorkDays,
+      workStartDate: values.workStartDate || null,
     })
   }
 
@@ -134,6 +136,16 @@ function ScheduleSettingsPage() {
                   min: { value: 0, message: 'Mínimo de 0 minutos.' },
                   max: { value: 240, message: 'Máximo de 240 minutos.' },
                 })}
+              />
+            </label>
+
+            <label htmlFor="scheduleWorkStartDate">
+              Data de início
+              <input
+                id="scheduleWorkStartDate"
+                type="date"
+                disabled={isSubmitting}
+                {...register('workStartDate')}
               />
             </label>
 

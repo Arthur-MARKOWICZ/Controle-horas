@@ -9,6 +9,7 @@ import java.util.Set;
 
 public record DashboardResponse(
         LocalDate date,
+        LocalDate workStartDate,
         int dailyWorkloadMinutes,
         LocalTime standardEntryTime,
         LocalTime standardExitTime,
@@ -21,6 +22,7 @@ public record DashboardResponse(
         int pausedMinutesToday,
         int balanceMinutesToday,
         int hourBankMinutes,
-        List<WorkLogResponse> workLogs
+        List<WorkLogResponse> workLogs,
+        boolean scheduleConfigured
 ) {
 }

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Set;
 import java.util.UUID;
@@ -17,6 +18,8 @@ public record UpdateUserRequest(
         String role,
 
         UUID managerId,
+
+        LocalDate workStartDate,
 
         LocalTime standardEntryTime,
 

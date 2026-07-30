@@ -18,15 +18,11 @@ export const DEFAULT_WORK_DAYS = [
 
 /**
  * Normalizes work days from the API or form.
- * Empty array stays empty (caller must validate).
- * null/undefined falls back to Mon–Fri defaults.
+ * Empty/null/undefined returns empty array (caller must validate).
  */
 export function normalizeWorkDays(workDays) {
-  if (workDays == null) {
-    return [...DEFAULT_WORK_DAYS]
-  }
-  if (!Array.isArray(workDays)) {
-    return [...DEFAULT_WORK_DAYS]
+  if (workDays == null || !Array.isArray(workDays)) {
+    return []
   }
   if (workDays.length === 0) {
     return []

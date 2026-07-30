@@ -36,6 +36,7 @@ export async function updateDailyWorkload({
   lunchEnabled,
   lunchDurationMinutes,
   workDays,
+  workStartDate,
 }) {
   const response = await api.put('/api/users/me/daily-workload', {
     standardEntryTime,
@@ -43,6 +44,7 @@ export async function updateDailyWorkload({
     lunchEnabled,
     lunchDurationMinutes,
     workDays,
+    workStartDate,
   })
   return response.data
 }

@@ -47,6 +47,7 @@ public class UserController {
                         request.standardExitTime(),
                         request.lunchEnabled(),
                         request.lunchDurationMinutes(),
-                        request.workDays())));
+                        request.workDays(),
+                        request.workStartDate())));
     }
 }

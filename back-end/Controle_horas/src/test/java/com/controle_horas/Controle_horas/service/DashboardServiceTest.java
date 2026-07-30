@@ -25,8 +25,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class DashboardServiceTest {
 
     @Mock private WorkLogRepository workLogRepository;
@@ -38,13 +41,19 @@ class DashboardServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-07-14T12:00:00Z"), ZoneOffset.UTC);
-        dashboardService = new DashboardService(
-                workLogRepository, userService, new WorkTimeCalculationService(), clock);
+        WorkTimeCalculationService workTimeCalculationService = new WorkTimeCalculationService();
         user = new User();
         user.setId(UUID.randomUUID());
         user.setEmail("arthur@example.com");
         user.setDailyWorkloadMinutes(530);
         user.setCreatedAt(Instant.parse("2026-07-14T03:00:00Z"));
+        when(workLogRepository.findTopByUserIdOrderByEntryAtAsc(user.getId())).thenReturn(Optional.empty());
+        dashboardService = new DashboardService(
+                workLogRepository,
+                userService,
+                workTimeCalculationService,
+                new WorkStartDateService(workLogRepository, workTimeCalculationService),
+                clock);
     }
 
     @Test
@@ -139,6 +148,8 @@ class DashboardServiceTest {
         afternoon.close(Instant.parse("2026-07-14T20:00:00Z"), CloseReason.EXIT);
 
         when(userService.findUser(user.getEmail())).thenReturn(user);
+        when(workLogRepository.findTopByUserIdOrderByEntryAtAsc(user.getId()))
+                .thenReturn(Optional.of(morning));
         when(workLogRepository.findByUserIdAndEntryAtGreaterThanEqualAndEntryAtLessThanOrderByEntryAtAsc(
                         eq(user.getId()), any(), any()))
                 .thenReturn(List.of(morning, afternoon));

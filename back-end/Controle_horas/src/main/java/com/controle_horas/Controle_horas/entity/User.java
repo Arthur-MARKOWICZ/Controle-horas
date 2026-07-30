@@ -16,7 +16,9 @@ import jakarta.persistence.Table;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
 
@@ -24,7 +26,6 @@ import java.util.UUID;
 @Table(name = "users")
 public class User {
 
-    private static final int DEFAULT_LUNCH_DURATION_MINUTES = 60;
     private static final int MIN_DAILY_WORKLOAD_MINUTES = 1;
     private static final int MAX_DAILY_WORKLOAD_MINUTES = 1440;
     private static final int MAX_LUNCH_DURATION_MINUTES = 240;
@@ -55,23 +56,26 @@ public class User {
     private User createdBy;
 
     @Column(name = "daily_workload_minutes", nullable = false)
-    private int dailyWorkloadMinutes = 470;
+    private int dailyWorkloadMinutes = 0;
 
-    @Column(name = "standard_entry_time", nullable = false)
-    private LocalTime standardEntryTime = LocalTime.of(8, 30);
+    @Column(name = "standard_entry_time")
+    private LocalTime standardEntryTime;
 
-    @Column(name = "standard_exit_time", nullable = false)
-    private LocalTime standardExitTime = LocalTime.of(17, 20);
+    @Column(name = "standard_exit_time")
+    private LocalTime standardExitTime;
 
     @Column(name = "lunch_enabled", nullable = false)
-    private boolean lunchEnabled = true;
+    private boolean lunchEnabled = false;
 
     @Column(name = "lunch_duration_minutes", nullable = false)
-    private int lunchDurationMinutes = DEFAULT_LUNCH_DURATION_MINUTES;
+    private int lunchDurationMinutes = 0;
 
     @Convert(converter = WorkDaysConverter.class)
-    @Column(name = "work_days", nullable = false, length = 100)
-    private Set<DayOfWeek> workDays = WorkDaysConverter.defaultWorkDays();
+    @Column(name = "work_days", length = 100)
+    private Set<DayOfWeek> workDays = Collections.emptySet();
+
+    @Column(name = "work_start_date")
+    private LocalDate workStartDate;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -88,8 +92,8 @@ public class User {
         if (role == null) {
             role = UserRole.USER;
         }
-        if (workDays == null || workDays.isEmpty()) {
-            workDays = WorkDaysConverter.defaultWorkDays();
+        if (workDays == null) {
+            workDays = Collections.emptySet();
         }
         createdAt = now;
         updatedAt = now;
@@ -202,11 +206,19 @@ public class User {
     }
 
     public Set<DayOfWeek> getWorkDays() {
-        return workDays == null ? WorkDaysConverter.defaultWorkDays() : Set.copyOf(workDays);
+        return workDays == null ? Collections.emptySet() : Set.copyOf(workDays);
     }
 
     public void setWorkDays(Set<DayOfWeek> workDays) {
         this.workDays = WorkDaysConverter.normalize(workDays);
+    }
+
+    public LocalDate getWorkStartDate() {
+        return workStartDate;
+    }
+
+    public void setWorkStartDate(LocalDate workStartDate) {
+        this.workStartDate = workStartDate;
     }
 
     public void updateWorkSchedule(
@@ -242,6 +254,7 @@ public class User {
 
     private void updateDailyWorkloadMinutesFromSchedule() {
         if (standardEntryTime == null || standardExitTime == null || !standardExitTime.isAfter(standardEntryTime)) {
+            dailyWorkloadMinutes = 0;
             return;
         }
         if (lunchDurationMinutes < 0 || lunchDurationMinutes > MAX_LUNCH_DURATION_MINUTES) {
@@ -257,6 +270,13 @@ public class User {
                             + " and " + MAX_DAILY_WORKLOAD_MINUTES + " minutes after lunch");
         }
         dailyWorkloadMinutes = netWorkload;
+    }
+
+    public boolean isScheduleConfigured() {
+        return standardEntryTime != null
+                && standardExitTime != null
+                && workDays != null
+                && !workDays.isEmpty();
     }
 
     public Instant getCreatedAt() {

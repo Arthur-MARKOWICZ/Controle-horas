@@ -28,16 +28,19 @@ public class HistoryService {
     private final WorkLogRepository workLogRepository;
     private final UserService userService;
     private final WorkTimeCalculationService workTimeCalculationService;
+    private final WorkStartDateService workStartDateService;
     private final Clock clock;
 
     public HistoryService(
             WorkLogRepository workLogRepository,
             UserService userService,
             WorkTimeCalculationService workTimeCalculationService,
+            WorkStartDateService workStartDateService,
             Clock clock) {
         this.workLogRepository = workLogRepository;
         this.userService = userService;
         this.workTimeCalculationService = workTimeCalculationService;
+        this.workStartDateService = workStartDateService;
         this.clock = clock;
     }
 
@@ -57,27 +60,31 @@ public class HistoryService {
         Set<DayOfWeek> workDays = user.getWorkDays();
         int dailyWorkloadMinutes = user.getDailyWorkloadMinutes();
         LocalDate today = LocalDate.now(clock.withZone(WorkTimeCalculationService.DISPLAY_ZONE));
-        LocalDate fromDate = workTimeCalculationService.toDisplayDate(user.getCreatedAt());
         LocalDate bankUntilDate = endDate.isAfter(today) ? today : endDate;
+        LocalDate resolvedStartDate = workStartDateService.resolveStartDate(user);
 
         Map<LocalDate, List<WorkLog>> logsByDate = workTimeCalculationService.groupByDisplayDate(periodLogs);
         List<HistoryDayResponse> days = buildHistoryDays(
                 startDate,
                 endDate,
                 today,
-                fromDate,
+                resolvedStartDate,
                 logsByDate,
                 dailyWorkloadMinutes,
                 workDays);
 
         int totalWorkedMinutes = days.stream().mapToInt(HistoryDayResponse::workedMinutes).sum();
         int totalBalanceMinutes = days.stream().mapToInt(HistoryDayResponse::balanceMinutes).sum();
-        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
-                allLogs,
-                dailyWorkloadMinutes,
-                workDays,
-                startDate,
-                bankUntilDate);
+        int hourBankMinutes = 0;
+        if (resolvedStartDate != null) {
+            LocalDate bankFromDate = startDate.isBefore(resolvedStartDate) ? resolvedStartDate : startDate;
+            hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
+                    allLogs,
+                    dailyWorkloadMinutes,
+                    workDays,
+                    bankFromDate,
+                    bankUntilDate);
+        }
 
         return new HistoryResponse(
                 startDate,
@@ -92,7 +99,7 @@ public class HistoryService {
             LocalDate startDate,
             LocalDate endDate,
             LocalDate today,
-            LocalDate fromDate,
+            LocalDate resolvedStartDate,
             Map<LocalDate, List<WorkLog>> logsByDate,
             int dailyWorkloadMinutes,
             Set<DayOfWeek> workDays) {
@@ -107,7 +114,8 @@ public class HistoryService {
 
             boolean pastWorkDayWithoutLogs = !date.isAfter(today)
                     && date.isBefore(today)
-                    && !date.isBefore(fromDate)
+                    && resolvedStartDate != null
+                    && !date.isBefore(resolvedStartDate)
                     && workTimeCalculationService.isWorkDay(date, workDays);
             if (pastWorkDayWithoutLogs) {
                 days.add(toAbsenceDayResponse(date, dailyWorkloadMinutes));

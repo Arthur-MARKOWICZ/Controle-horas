@@ -25,16 +25,19 @@ public class DashboardService {
     private final WorkLogRepository workLogRepository;
     private final UserService userService;
     private final WorkTimeCalculationService workTimeCalculationService;
+    private final WorkStartDateService workStartDateService;
     private final Clock clock;
 
     public DashboardService(
             WorkLogRepository workLogRepository,
             UserService userService,
             WorkTimeCalculationService workTimeCalculationService,
+            WorkStartDateService workStartDateService,
             Clock clock) {
         this.workLogRepository = workLogRepository;
         this.userService = userService;
         this.workTimeCalculationService = workTimeCalculationService;
+        this.workStartDateService = workStartDateService;
         this.clock = clock;
     }
 
@@ -109,33 +112,44 @@ public class DashboardService {
 
         List<WorkLog> todayLogs = workLogRepository
                 .findByUserIdAndEntryAtGreaterThanEqualAndEntryAtLessThanOrderByEntryAtAsc(user.getId(), start, end);
-        List<WorkLog> allLogs = workLogRepository.findByUserIdOrderByEntryAtAsc(user.getId());
+
+        boolean scheduleConfigured = user.isScheduleConfigured();
 
         Instant now = Instant.now(clock);
         int workedMinutesToday = workTimeCalculationService.sumWorkedMinutesIncludingOpen(todayLogs, now);
         int pausedMinutesToday = workTimeCalculationService.sumPausedMinutes(todayLogs);
-        int balanceMinutesToday = workTimeCalculationService.calculateDailyBalanceMinutes(
-                workedMinutesToday,
-                date,
-                user.getDailyWorkloadMinutes(),
-                user.getWorkDays());
-        Instant expectedExitAt = workTimeCalculationService.calculateExpectedExitAt(
-                todayLogs,
-                date,
-                user.getDailyWorkloadMinutes(),
-                user.getWorkDays(),
-                user.isLunchEnabled(),
-                user.getLunchDurationMinutes());
-        LocalDate fromDate = workTimeCalculationService.toDisplayDate(user.getCreatedAt());
-        int hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
-                allLogs,
-                user.getDailyWorkloadMinutes(),
-                user.getWorkDays(),
-                fromDate,
-                date);
+        int balanceMinutesToday = 0;
+        Instant expectedExitAt = null;
+        int hourBankMinutes = 0;
+
+        if (scheduleConfigured) {
+            balanceMinutesToday = workTimeCalculationService.calculateDailyBalanceMinutes(
+                    workedMinutesToday,
+                    date,
+                    user.getDailyWorkloadMinutes(),
+                    user.getWorkDays());
+            expectedExitAt = workTimeCalculationService.calculateExpectedExitAt(
+                    todayLogs,
+                    date,
+                    user.getDailyWorkloadMinutes(),
+                    user.getWorkDays(),
+                    user.isLunchEnabled(),
+                    user.getLunchDurationMinutes());
+            LocalDate resolvedStartDate = workStartDateService.resolveStartDate(user);
+            if (resolvedStartDate != null) {
+                List<WorkLog> allLogs = workLogRepository.findByUserIdOrderByEntryAtAsc(user.getId());
+                hourBankMinutes = workTimeCalculationService.calculateHourBankMinutes(
+                        allLogs,
+                        user.getDailyWorkloadMinutes(),
+                        user.getWorkDays(),
+                        resolvedStartDate,
+                        date);
+            }
+        }
 
         return new DashboardResponse(
                 date,
+                user.getWorkStartDate(),
                 user.getDailyWorkloadMinutes(),
                 user.getStandardEntryTime(),
                 user.getStandardExitTime(),
@@ -148,7 +162,8 @@ public class DashboardService {
                 pausedMinutesToday,
                 balanceMinutesToday,
                 hourBankMinutes,
-                todayLogs.stream().map(this::toResponse).toList());
+                todayLogs.stream().map(this::toResponse).toList(),
+                scheduleConfigured);
     }
 
     private String resolveNextAction(List<WorkLog> todayLogs) {

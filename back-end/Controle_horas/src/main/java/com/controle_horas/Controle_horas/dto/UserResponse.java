@@ -1,6 +1,7 @@
 package com.controle_horas.Controle_horas.dto;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Set;
 import java.util.UUID;
@@ -13,6 +14,7 @@ public record UserResponse(
         UUID managerId,
         String managerName,
         UUID createdById,
+        LocalDate workStartDate,
         int dailyWorkloadMinutes,
         LocalTime standardEntryTime,
         LocalTime standardExitTime,

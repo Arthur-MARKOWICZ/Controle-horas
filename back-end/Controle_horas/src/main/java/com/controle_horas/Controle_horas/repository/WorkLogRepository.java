@@ -13,6 +13,8 @@ public interface WorkLogRepository extends JpaRepository<WorkLog, UUID> {
 
     Optional<WorkLog> findTopByUserIdAndExitAtIsNullOrderByEntryAtDesc(UUID userId);
 
+    Optional<WorkLog> findTopByUserIdOrderByEntryAtAsc(UUID userId);
+
     List<WorkLog> findByUserIdAndEntryAtGreaterThanEqualAndEntryAtLessThanOrderByEntryAtAsc(
             UUID userId, Instant start, Instant end);
 

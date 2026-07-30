@@ -79,6 +79,7 @@ export function useDashboard() {
     lunchEnabled,
     lunchDurationMinutes,
     workDays,
+    workStartDate,
   }) => {
     setIsSubmitting(true)
     setError('')
@@ -90,6 +91,7 @@ export function useDashboard() {
         lunchEnabled,
         lunchDurationMinutes: Number(lunchDurationMinutes),
         workDays,
+        workStartDate,
       })
       if (!response.success || !response.data) throw new Error(response.message || 'Unable to save daily workload')
       const dashboardResponse = await dashboardService.getTodayDashboard()

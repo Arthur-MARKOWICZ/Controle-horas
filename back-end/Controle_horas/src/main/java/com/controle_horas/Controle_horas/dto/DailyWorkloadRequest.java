@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Set;
 
@@ -24,5 +25,7 @@ public record DailyWorkloadRequest(
         Integer lunchDurationMinutes,
 
         @NotEmpty(message = "At least one work day must be selected")
-        Set<DayOfWeek> workDays
+        Set<DayOfWeek> workDays,
+
+        LocalDate workStartDate
 ) {}
