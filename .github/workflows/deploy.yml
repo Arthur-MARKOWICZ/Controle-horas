@@ -79,7 +79,7 @@ jobs:
           CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS || '*' }}
           SERVER_PORT=${{ secrets.SERVER_PORT || '8080' }}
           EOF
-          chmod 600 .env
+          chmod 644 .env
 
       - name: Copy docker-compose.prod.yml and .env to Oracle VM
         uses: appleboy/scp-action@v0.1.7

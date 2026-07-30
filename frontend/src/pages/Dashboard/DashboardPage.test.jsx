@@ -65,6 +65,7 @@ describe('DashboardPage', () => {
         balanceMinutesToday: -410,
         hourBankMinutes: 0,
         workLogs: [{ id: '1', entryAt: '2026-07-14T11:30:00Z', exitAt: null, closeReason: null }],
+        scheduleConfigured: true,
       },
     })
 
@@ -96,6 +97,7 @@ describe('DashboardPage', () => {
         balanceMinutesToday: -530,
         hourBankMinutes: 0,
         workLogs: [],
+        scheduleConfigured: true,
       },
     })
 

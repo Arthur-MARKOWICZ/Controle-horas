@@ -61,7 +61,8 @@ class DashboardControllerTest {
                         0,
                         -20,
                         -20,
-                        List.of()));
+                        List.of(),
+                        true));
 
         mockMvc.perform(get("/api/dashboard/today")
                         .with(user("arthur@example.com"))

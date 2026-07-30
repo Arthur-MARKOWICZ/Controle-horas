@@ -13,8 +13,10 @@ import com.controle_horas.Controle_horas.entity.User;
 import com.controle_horas.Controle_horas.entity.WorkLog;
 import com.controle_horas.Controle_horas.exception.InvalidWorkLogStateException;
 import com.controle_horas.Controle_horas.repository.WorkLogRepository;
+import com.controle_horas.Controle_horas.util.WorkDaysConverter;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +49,11 @@ class DashboardServiceTest {
         user.setEmail("arthur@example.com");
         user.setDailyWorkloadMinutes(530);
         user.setCreatedAt(Instant.parse("2026-07-14T03:00:00Z"));
+        user.setStandardEntryTime(LocalTime.of(8, 30));
+        user.setStandardExitTime(LocalTime.of(17, 20));
+        user.setLunchEnabled(true);
+        user.setLunchDurationMinutes(60);
+        user.setWorkDays(WorkDaysConverter.defaultWorkDays());
         when(workLogRepository.findTopByUserIdOrderByEntryAtAsc(user.getId())).thenReturn(Optional.empty());
         dashboardService = new DashboardService(
                 workLogRepository,
