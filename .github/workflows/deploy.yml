@@ -42,7 +42,7 @@ jobs:
           echo "IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Build and push Backend Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.backend
@@ -67,17 +67,35 @@ jobs:
           IMAGE_NAME="ghcr.io/${{ github.repository }}/backend"
           echo "IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Copy docker-compose.prod.yml to Oracle VM
+      - name: Generate secure .env file locally
+        run: |
+          cat << EOF > .env
+          BACKEND_IMAGE=${{ env.IMAGE_NAME }}:latest
+          POSTGRES_DB=${{ secrets.POSTGRES_DB || 'controle_horas' }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER || 'postgres' }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_EXPIRATION_MS=${{ secrets.JWT_EXPIRATION_MS || '3600000' }}
+          CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS || '*' }}
+          SERVER_PORT=${{ secrets.SERVER_PORT || '8080' }}
+          EOF
+          chmod 600 .env
+
+      - name: Copy docker-compose.prod.yml and .env to Oracle VM
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.OCI_VM_HOST }}
           username: ${{ secrets.OCI_VM_USER }}
           key: ${{ secrets.OCI_VM_KEY }}
           port: ${{ secrets.OCI_VM_PORT || 22 }}
-          source: "docker-compose.prod.yml"
+          source: "docker-compose.prod.yml,.env"
           target: "~/controle-horas"
 
-      - name: Deploy application via SSH
+      - name: Clean runner .env
+        if: always()
+        run: rm -f .env
+
+      - name: Deploy application & verify health via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.OCI_VM_HOST }}
@@ -87,25 +105,35 @@ jobs:
           script: |
             set -e
             cd ~/controle-horas
+            chmod 600 .env
 
-            # Log in to GHCR to pull private images if needed
+            # Log in to GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-            # Generate .env file dynamically from GitHub Secrets
-            cat << 'EOF' > .env
-            BACKEND_IMAGE=${{ env.IMAGE_NAME }}:latest
-            POSTGRES_DB=${{ secrets.POSTGRES_DB || 'controle_horas' }}
-            POSTGRES_USER=${{ secrets.POSTGRES_USER || 'postgres' }}
-            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRATION_MS=${{ secrets.JWT_EXPIRATION_MS || '3600000' }}
-            CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS || '*' }}
-            SERVER_PORT=${{ secrets.SERVER_PORT || '8080' }}
-            EOF
-
-            # Pull latest containers and start services
+            # Pull latest images and recreate containers
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Wait and verify health check (up to 60 seconds)
+            echo "Waiting for backend health check..."
+            HEALTHY=false
+            for i in $(seq 1 12); do
+              STATUS=$(docker inspect --format='{{json .State.Health.Status}}' controle_horas_backend 2>/dev/null || echo '"unknown"')
+              if [ "$STATUS" = '"healthy"' ]; then
+                echo "Backend container is healthy!"
+                HEALTHY=true
+                break
+              fi
+              echo "Attempt $i/12: Container health status is $STATUS. Waiting 5s..."
+              sleep 5
+            done
+
+            if [ "$HEALTHY" = "false" ]; then
+              echo "Error: Backend failed health check!"
+              echo "--- Container Logs ---"
+              docker compose -f docker-compose.prod.yml logs --tail=100 backend
+              exit 1
+            fi
 
             # Clean up dangling images
             docker image prune -f
