@@ -11,129 +11,431 @@ on:
       - 'Dockerfile.backend'
       - 'docker-compose.prod.yml'
       - '.github/workflows/deploy.yml'
+
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
+env:
+  GHCR_REGISTRY: ghcr.io
+
 jobs:
+
+  # ============================================================
+  # BUILD BACKEND
+  # ============================================================
   build-and-push-backend:
     name: Build & Push Backend Image to GHCR
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GitHub Container Registry (GHCR)
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Format repository name to lowercase
+      - name: Define Docker image name
         run: |
           IMAGE_NAME="ghcr.io/${{ github.repository }}/backend"
-          echo "IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
 
-      - name: Build and push Backend Docker image
+          echo "IMAGE_NAME=$IMAGE_NAME" >> "$GITHUB_ENV"
+
+          echo "Docker image:"
+          echo "$IMAGE_NAME"
+
+      - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.backend
+
           push: true
+
           tags: |
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+
+  # ============================================================
+  # DEPLOY TO ORACLE VM
+  # ============================================================
   deploy-to-oracle-vm:
-    name: Deploy to Oracle Cloud VM via SSH
+    name: Deploy to Oracle Cloud VM
     needs: build-and-push-backend
     runs-on: ubuntu-latest
 
     steps:
+
+      # ----------------------------------------------------------
+      # Checkout
+      # ----------------------------------------------------------
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Format repository name to lowercase
+
+      # ----------------------------------------------------------
+      # Define image name
+      # ----------------------------------------------------------
+      - name: Define Docker image name
         run: |
           IMAGE_NAME="ghcr.io/${{ github.repository }}/backend"
-          echo "IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
 
-      - name: Generate secure .env file locally
+          echo "IMAGE_NAME=$IMAGE_NAME" >> "$GITHUB_ENV"
+
+          echo "Deploying image:"
+          echo "$IMAGE_NAME:latest"
+
+
+      # ----------------------------------------------------------
+      # Verify deployment files
+      # ----------------------------------------------------------
+      - name: Verify deployment files
         run: |
-          cat << EOF > .env
-          BACKEND_IMAGE=${{ env.IMAGE_NAME }}:latest
-          POSTGRES_DB=${{ secrets.POSTGRES_DB || 'controle_horas' }}
-          POSTGRES_USER=${{ secrets.POSTGRES_USER || 'postgres' }}
-          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          JWT_SECRET=${{ secrets.JWT_SECRET }}
-          JWT_EXPIRATION_MS=${{ secrets.JWT_EXPIRATION_MS || '3600000' }}
-          CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS || '*' }}
-          SERVER_PORT=${{ secrets.SERVER_PORT || '8080' }}
-          EOF
-          chmod 644 .env
+          echo "Current directory:"
+          pwd
 
-      - name: Copy docker-compose.prod.yml and .env to Oracle VM
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.OCI_VM_HOST }}
-          username: ${{ secrets.OCI_VM_USER }}
-          key: ${{ secrets.OCI_VM_KEY }}
-          port: ${{ secrets.OCI_VM_PORT || 22 }}
-          source: "docker-compose.prod.yml,.env"
-          target: "~/controle-horas"
+          echo
+          echo "Repository:"
+          ls -lah
 
-      - name: Clean runner .env
-        if: always()
-        run: rm -f .env
+          echo
+          echo "Docker Compose:"
+          ls -lh docker-compose.prod.yml
 
-      - name: Deploy application & verify health via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.OCI_VM_HOST }}
-          username: ${{ secrets.OCI_VM_USER }}
-          key: ${{ secrets.OCI_VM_KEY }}
-          port: ${{ secrets.OCI_VM_PORT || 22 }}
-          script: |
-            set -e
-            cd ~/controle-horas
-            chmod 600 .env
+          echo
+          echo "Docker Compose file type:"
+          file docker-compose.prod.yml
 
-            # Log in to GHCR
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-            # Pull latest images and recreate containers
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+      # ----------------------------------------------------------
+      # Configure SSH
+      # ----------------------------------------------------------
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
 
-            # Wait and verify health check (up to 60 seconds)
-            echo "Waiting for backend health check..."
-            HEALTHY=false
-            for i in $(seq 1 12); do
-              STATUS=$(docker inspect --format='{{json .State.Health.Status}}' controle_horas_backend 2>/dev/null || echo '"unknown"')
-              if [ "$STATUS" = '"healthy"' ]; then
-                echo "Backend container is healthy!"
-                HEALTHY=true
-                break
-              fi
-              echo "Attempt $i/12: Container health status is $STATUS. Waiting 5s..."
-              sleep 5
-            done
+          printf '%s\n' '${{ secrets.OCI_VM_KEY }}' > ~/.ssh/oci_key
+          chmod 600 ~/.ssh/oci_key
 
-            if [ "$HEALTHY" = "false" ]; then
-              echo "Error: Backend failed health check!"
-              echo "--- Container Logs ---"
-              docker compose -f docker-compose.prod.yml logs --tail=100 backend
+          ssh-keyscan \
+            -p "${{ secrets.OCI_VM_PORT || 22 }}" \
+            "${{ secrets.OCI_VM_HOST }}" \
+            >> ~/.ssh/known_hosts
+
+          chmod 644 ~/.ssh/known_hosts
+
+
+      # ----------------------------------------------------------
+      # Test SSH connection
+      # ----------------------------------------------------------
+      - name: Test SSH connection
+        timeout-minutes: 2
+        run: |
+          ssh \
+            -i ~/.ssh/oci_key \
+            -p "${{ secrets.OCI_VM_PORT || 22 }}" \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${{ secrets.OCI_VM_USER }}@${{ secrets.OCI_VM_HOST }}" \
+            "echo 'SSH connection successful'; whoami; hostname"
+
+
+      # ----------------------------------------------------------
+      # Ensure remote directory exists
+      # ----------------------------------------------------------
+      - name: Prepare Oracle VM
+        timeout-minutes: 2
+        run: |
+          ssh \
+            -i ~/.ssh/oci_key \
+            -p "${{ secrets.OCI_VM_PORT || 22 }}" \
+            -o ConnectTimeout=30 \
+            "${{ secrets.OCI_VM_USER }}@${{ secrets.OCI_VM_HOST }}" \
+            "mkdir -p ~/controle-horas"
+
+
+      # ----------------------------------------------------------
+      # Copy Docker Compose
+      # ----------------------------------------------------------
+      - name: Copy docker-compose.prod.yml
+        timeout-minutes: 2
+        run: |
+          scp \
+            -i ~/.ssh/oci_key \
+            -P "${{ secrets.OCI_VM_PORT || 22 }}" \
+            -o ConnectTimeout=30 \
+            docker-compose.prod.yml \
+            "${{ secrets.OCI_VM_USER }}@${{ secrets.OCI_VM_HOST }}:~/controle-horas/docker-compose.prod.yml"
+
+
+      # ----------------------------------------------------------
+      # Deploy
+      # ----------------------------------------------------------
+      - name: Deploy application
+        timeout-minutes: 5
+        env:
+          OCI_VM_HOST: ${{ secrets.OCI_VM_HOST }}
+          OCI_VM_USER: ${{ secrets.OCI_VM_USER }}
+          OCI_VM_PORT: ${{ secrets.OCI_VM_PORT || 22 }}
+
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'controle_horas' }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER || 'postgres' }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_EXPIRATION_MS: ${{ secrets.JWT_EXPIRATION_MS || '3600000' }}
+
+          CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS || '*' }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT || '8080' }}
+
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          BACKEND_IMAGE: ${{ env.IMAGE_NAME }}:latest
+
+        run: |
+
+          ssh \
+            -i ~/.ssh/oci_key \
+            -p "$OCI_VM_PORT" \
+            -o ConnectTimeout=30 \
+            "$OCI_VM_USER@$OCI_VM_HOST" \
+            "bash -s" <<EOF
+
+          set -e
+
+          echo "========================================"
+          echo "Starting deployment"
+          echo "========================================"
+
+          cd ~/controle-horas
+
+          echo
+          echo "Working directory:"
+          pwd
+
+          echo
+          echo "Files:"
+          ls -lah
+
+          # --------------------------------------------
+          # Create .env
+          # --------------------------------------------
+
+          umask 077
+
+          cat > .env <<ENVEOF
+          BACKEND_IMAGE=${BACKEND_IMAGE}
+          POSTGRES_DB=${POSTGRES_DB}
+          POSTGRES_USER=${POSTGRES_USER}
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+          JWT_SECRET=${JWT_SECRET}
+          JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS}
+          CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+          SERVER_PORT=${SERVER_PORT}
+          ENVEOF
+
+          chmod 600 .env
+
+          echo
+          echo ".env created successfully."
+
+
+          # --------------------------------------------
+          # Login GHCR
+          # --------------------------------------------
+
+          echo
+          echo "Logging in to GHCR..."
+
+          echo "${GHCR_TOKEN}" | \
+            docker login ghcr.io \
+            -u "${GHCR_USERNAME}" \
+            --password-stdin
+
+          echo "GHCR login successful."
+
+
+          # --------------------------------------------
+          # Pull new backend image
+          # --------------------------------------------
+
+          echo
+          echo "Pulling Docker images..."
+
+          docker compose \
+            -f docker-compose.prod.yml \
+            pull
+
+          echo "Images pulled successfully."
+
+
+          # --------------------------------------------
+          # Start containers
+          # --------------------------------------------
+
+          echo
+          echo "Starting containers..."
+
+          docker compose \
+            -f docker-compose.prod.yml \
+            up -d \
+            --remove-orphans
+
+          echo "Containers started."
+
+
+          # --------------------------------------------
+          # Show containers
+          # --------------------------------------------
+
+          echo
+          echo "Container status:"
+
+          docker compose \
+            -f docker-compose.prod.yml \
+            ps
+
+
+          # --------------------------------------------
+          # Find backend container
+          # --------------------------------------------
+
+          BACKEND_CONTAINER=\$(docker compose \
+            -f docker-compose.prod.yml \
+            ps -q backend)
+
+          if [ -z "\$BACKEND_CONTAINER" ]; then
+            echo
+            echo "ERROR: Backend container was not created."
+            echo
+            docker compose \
+              -f docker-compose.prod.yml \
+              logs --tail=100 backend
+
+            exit 1
+          fi
+
+          echo
+          echo "Backend container:"
+          echo "\$BACKEND_CONTAINER"
+
+
+          # --------------------------------------------
+          # Wait for health check
+          # --------------------------------------------
+
+          echo
+          echo "Waiting for backend health check..."
+
+          HEALTHY=false
+
+          for i in \$(seq 1 12); do
+
+            STATUS=\$(docker inspect \
+              --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' \
+              "\$BACKEND_CONTAINER" \
+              2>/dev/null || echo "unknown")
+
+            echo "Attempt \$i/12: \$STATUS"
+
+            if [ "\$STATUS" = "healthy" ]; then
+              HEALTHY=true
+              break
+            fi
+
+            if [ "\$STATUS" = "unhealthy" ]; then
+              echo
+              echo "Backend reported unhealthy."
+
+              docker compose \
+                -f docker-compose.prod.yml \
+                logs --tail=100 backend
+
               exit 1
             fi
 
-            # Clean up dangling images
-            docker image prune -f
+            sleep 5
+
+          done
+
+
+          # --------------------------------------------
+          # Health check failed
+          # --------------------------------------------
+
+          if [ "\$HEALTHY" = "false" ]; then
+
+            echo
+            echo "========================================"
+            echo "ERROR: Backend failed health check"
+            echo "========================================"
+
+            echo
+            echo "--- Container status ---"
+
+            docker compose \
+              -f docker-compose.prod.yml \
+              ps
+
+            echo
+            echo "--- Backend logs ---"
+
+            docker compose \
+              -f docker-compose.prod.yml \
+              logs --tail=100 backend
+
+            exit 1
+          fi
+
+
+          # --------------------------------------------
+          # Deployment successful
+          # --------------------------------------------
+
+          echo
+          echo "========================================"
+          echo "Backend is healthy!"
+          echo "Deployment successful."
+          echo "========================================"
+
+
+          # --------------------------------------------
+          # Cleanup unused images
+          # --------------------------------------------
+
+          echo
+          echo "Cleaning unused Docker images..."
+
+          docker image prune -f
+
+          echo
+          echo "Deployment completed successfully."
+
+          EOF
+
+
+      # ----------------------------------------------------------
+      # Cleanup local SSH credentials
+      # ----------------------------------------------------------
+      - name: Cleanup SSH credentials
+        if: always()
+        run: |
+          rm -f ~/.ssh/oci_key
