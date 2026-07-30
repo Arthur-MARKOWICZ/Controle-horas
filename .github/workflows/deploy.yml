@@ -189,7 +189,7 @@ jobs:
       # Deploy
       # ----------------------------------------------------------
       - name: Deploy application
-        timeout-minutes: 5
+        timeout-minutes: 20
         env:
           OCI_VM_HOST: ${{ secrets.OCI_VM_HOST }}
           OCI_VM_USER: ${{ secrets.OCI_VM_USER }}
