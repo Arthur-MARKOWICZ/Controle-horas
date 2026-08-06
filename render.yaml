@@ -18,12 +18,3 @@ services:
         sync: false
       - key: CORS_ALLOWED_ORIGINS
         sync: false
-
-  - type: web
-    name: controle-horas-web
-    runtime: docker
-    dockerfilePath: ./Dockerfile.frontend
-    dockerContext: .
-    envVars:
-      - key: VITE_API_BASE_URL
-        sync: false

@@ -4,7 +4,7 @@
   "compatibility_date": "2026-07-21",
   "main": "src/worker.js",
   "vars": {
-    "API_ORIGIN": "http://137.131.254.106"
+    "API_ORIGIN": "http://api.example.com"
   },
   "observability": {
     "enabled": true
