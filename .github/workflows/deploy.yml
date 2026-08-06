@@ -361,7 +361,9 @@ jobs:
 
           HEALTHY=false
 
-          for i in $(seq 1 36); do
+          # Escape command substitution so it runs on the VM, after the
+          # GitHub Actions runner has rendered this unquoted heredoc.
+          for i in \$(seq 1 36); do
 
             STATUS=\$(docker inspect \
               --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' \

@@ -2,6 +2,10 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "controle-horas",
   "compatibility_date": "2026-07-21",
+  "main": "src/worker.js",
+  "vars": {
+    "API_ORIGIN": "http://137.131.254.106"
+  },
   "observability": {
     "enabled": true
   },
