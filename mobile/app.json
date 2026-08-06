@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Controle de Horas",
+    "slug": "controle-horas",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "controlehoras",
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.controlehoras.app" },
+    "android": {
+      "package": "com.controlehoras.app",
+      "usesCleartextTraffic": true
+    },
+    "plugins": ["expo-secure-store", "expo-document-picker"]
+  }
+}
