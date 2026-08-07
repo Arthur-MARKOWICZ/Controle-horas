@@ -1,12 +1,12 @@
 # Deploy de producao
 
-O deploy da VM executa somente o backend Spring Boot. O PostgreSQL fica no Neon e o frontend e servido pelo Cloudflare Worker. Nginx nao faz parte desta arquitetura.
+O deploy da VM executa o backend Spring Boot e o frontend React. O PostgreSQL fica no Neon. O frontend e servido pelo Nginx e encaminha as requisicoes para `/api` ao backend pela rede interna do Docker.
 
 ```text
-Browser -- HTTPS --> Cloudflare Worker -- HTTP --> api.seudominio.com:80 (Oracle VM) -- TLS --> Neon PostgreSQL
+Browser -- HTTP/HTTPS --> Nginx (Oracle VM) -- /api --> Spring Boot (Docker) -- TLS --> Neon PostgreSQL
 ```
 
-O Worker recebe as chamadas locais para `/api` e as encaminha para `API_ORIGIN`. Por isso, o navegador continua usando HTTPS e nao precisa conhecer o endereco HTTP da VM.
+O build do frontend usa `VITE_API_BASE_URL=/api`; assim, navegador e API usam a mesma origem e nao exigem uma configuracao de URL da API no cliente.
 
 ## GitHub Actions secrets
 
@@ -22,21 +22,20 @@ Configure os seguintes secrets em `Settings > Secrets and variables > Actions`:
 | `DB_USERNAME` | Usuario exibido pelo Neon, normalmente `neondb_owner`. |
 | `DB_PASSWORD` | Senha do usuario do Neon. |
 | `JWT_SECRET` | Segredo aleatorio de pelo menos 32 bytes. |
-| `CORS_ALLOWED_ORIGINS` | `https://controle-horas.arthurlopes25072005.workers.dev` e qualquer dominio customizado do frontend, separados por virgula. |
+| `CORS_ALLOWED_ORIGINS` | URL HTTPS publica do frontend, por exemplo `https://horas.seudominio.com`. |
 
-Opcionalmente, configure `JWT_EXPIRATION_MS` (padrao `3600000`) e `BACKEND_PORT` (padrao `80`). Nao configure `POSTGRES_DB`, `POSTGRES_USER` ou `POSTGRES_PASSWORD`: eles pertenciam ao banco local removido.
+Opcionalmente, configure `JWT_EXPIRATION_MS` (padrao `3600000`) e `FRONTEND_PORT` (padrao `80`). Nao configure `POSTGRES_DB`, `POSTGRES_USER` ou `POSTGRES_PASSWORD`: eles pertenciam ao banco local removido.
 
-`GITHUB_TOKEN` e fornecido automaticamente pelo GitHub Actions; nao crie um secret para ele. O pacote no GHCR precisa estar publico, ou o token usado pela VM deve ter permissao de leitura de pacotes.
+`GITHUB_TOKEN` e fornecido automaticamente pelo GitHub Actions; nao crie um secret para ele. Os pacotes de backend e frontend no GHCR precisam estar publicos, ou o token usado pela VM deve ter permissao de leitura de pacotes.
 
-## Neon e Cloudflare
+## Neon, DNS e HTTPS
 
 1. Copie os dados de conexao do painel do Neon. Converta a URL `postgresql://...` para `jdbc:postgresql://...` e mantenha `sslmode=require`.
-2. Crie um registro DNS `A` ou `AAAA` para, por exemplo, `api.seudominio.com`, apontando para a VM. Deixe-o como **DNS only** (sem proxy) e use um hostname: Workers nao aceitam `fetch` diretamente para IPs.
-3. Em `frontend/wrangler.jsonc`, ajuste `API_ORIGIN` para `http://api.seudominio.com`. Se usar outro valor em `BACKEND_PORT`, inclua a mesma porta na URL.
-4. Na Security List/NSG da Oracle, libere TCP na porta do backend para que o Worker alcance a VM. Idealmente restrinja a regra aos [intervalos de IP da Cloudflare](https://www.cloudflare.com/ips/).
-5. Publique novamente o Worker na Cloudflare. O frontend mantem `VITE_API_BASE_URL=/api`, portanto as requisicoes do browser continuam same-origin.
+2. Crie um registro DNS `A` ou `AAAA` para o dominio do frontend, apontando para a VM.
+3. Na Security List/NSG da Oracle, libere TCP na porta configurada em `FRONTEND_PORT`.
+4. Configure TLS no proxy/rede que estiver na frente da VM e use a URL HTTPS correspondente em `CORS_ALLOWED_ORIGINS`.
 
-O backend ainda valida a origem encaminhada pelo Worker. Inclua no `CORS_ALLOWED_ORIGINS` somente URLs HTTPS do frontend; nunca use `*` com credenciais habilitadas.
+O backend valida a origem do frontend. Inclua no `CORS_ALLOWED_ORIGINS` somente URLs HTTPS permitidas; nunca use `*` com credenciais habilitadas.
 
 ## Primeira migracao
 
