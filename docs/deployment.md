@@ -8,6 +8,8 @@ Browser -- HTTP/HTTPS --> Nginx (Oracle VM) -- /api --> Spring Boot (Docker) -- 
 
 O build do frontend usa `VITE_API_BASE_URL=/api`; assim, navegador e API usam a mesma origem e nao exigem uma configuracao de URL da API no cliente.
 
+Opcionalmente, defina `VITE_API_BASE_URL` nos GitHub Actions secrets para informar outra URL da API durante o build do frontend. Isso so e necessario se frontend e backend forem publicados em origens diferentes. Como esse valor e incorporado ao JavaScript distribuido ao navegador, ele nao deve conter dados sigilosos; uma variavel de repositorio tambem pode ser usada.
+
 ## GitHub Actions secrets
 
 Configure os seguintes secrets em `Settings > Secrets and variables > Actions`:

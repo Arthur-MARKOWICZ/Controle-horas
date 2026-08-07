@@ -68,6 +68,8 @@ jobs:
           context: .
           file: ./Dockerfile.frontend
           push: true
+          build-args: |
+            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL || '/api' }}
           tags: |
             ${{ steps.images.outputs.frontend-name }}:latest
             ${{ steps.images.outputs.frontend-name }}:${{ github.sha }}

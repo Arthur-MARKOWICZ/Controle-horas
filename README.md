@@ -144,6 +144,8 @@ O deploy atualmente configurado é **temporário** e executa na VM Oracle Cloud.
 
 Essa configuração **não representa o deploy final**: a infraestrutura e o processo de publicação serão revisados antes da versão definitiva. Os detalhes do ambiente atual, incluindo as variáveis e secrets necessários, estão em [docs/deployment.md](docs/deployment.md).
 
+O frontend ocupa a porta interna `80` e, por padrão, a porta `80` da VM (`FRONTEND_PORT=80`). Caso a VM já use essa porta, defina `FRONTEND_PORT` com outra porta disponível. Para instalações em que a API esteja em outra origem, o workflow também aceita o secret opcional `VITE_API_BASE_URL`; no deploy atual, mantenha o padrão `/api`.
+
 ## Documentação adicional
 
 - [Arquitetura](docs/architecture.mdc)
