@@ -47,8 +47,8 @@ jobs:
         run: |
           BACKEND_IMAGE_NAME="ghcr.io/${{ github.repository }}/backend"
           FRONTEND_IMAGE_NAME="ghcr.io/${{ github.repository }}/frontend"
-          echo "backend-name=$(echo \"$BACKEND_IMAGE_NAME\" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
-          echo "frontend-name=$(echo \"$FRONTEND_IMAGE_NAME\" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "backend-name=$(echo "$BACKEND_IMAGE_NAME" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "frontend-name=$(echo "$FRONTEND_IMAGE_NAME" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Build and push backend image
         uses: docker/build-push-action@v6
