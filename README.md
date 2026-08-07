@@ -140,11 +140,11 @@ Consulte os arquivos `.env.example` de cada aplicação para os valores esperado
 
 ## Deploy atual
 
-O deploy atualmente configurado é **temporário** e executa na VM Oracle Cloud. O GitHub Actions cria imagens Docker do backend e frontend, publica-as no GitHub Container Registry e as atualiza na VM. Nessa topologia, o Nginx serve o frontend e encaminha requisições em `/api` para o backend; o PostgreSQL é hospedado no Neon.
+O deploy atualmente configurado é **temporário** e executa na VM Oracle Cloud. O GitHub Actions cria imagens Docker do backend e frontend, publica-as no GitHub Container Registry e as atualiza na VM. Nessa topologia, o Nginx serve o frontend e o navegador acessa diretamente o backend pela porta pública `8080`; o PostgreSQL é hospedado no Neon.
 
 Essa configuração **não representa o deploy final**: a infraestrutura e o processo de publicação serão revisados antes da versão definitiva. Os detalhes do ambiente atual, incluindo as variáveis e secrets necessários, estão em [docs/deployment.md](docs/deployment.md).
 
-O frontend ocupa a porta interna `80` e, por padrão, a porta `80` da VM (`FRONTEND_PORT=80`). Caso a VM já use essa porta, defina `FRONTEND_PORT` com outra porta disponível. Para instalações em que a API esteja em outra origem, o workflow também aceita o secret opcional `VITE_API_BASE_URL`; no deploy atual, mantenha o padrão `/api`.
+O frontend ocupa a porta interna `80` e, por padrão, a porta `80` da VM (`FRONTEND_PORT=80`). O backend é publicado na porta `8080` (`BACKEND_PORT=8080`). Configure o secret obrigatório `VITE_API_BASE_URL` com a URL pública da API, por exemplo `http://IP_DA_VM:8080`, e configure `CORS_ALLOWED_ORIGINS` com a URL do frontend. Em produção com frontend HTTPS, a API também deve usar HTTPS para não haver bloqueio de mixed content.
 
 ## Documentação adicional
 

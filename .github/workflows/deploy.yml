@@ -69,7 +69,7 @@ jobs:
           file: ./Dockerfile.frontend
           push: true
           build-args: |
-            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL || '/api' }}
+            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
           tags: |
             ${{ steps.images.outputs.frontend-name }}:latest
             ${{ steps.images.outputs.frontend-name }}:${{ github.sha }}
@@ -114,6 +114,7 @@ jobs:
           JWT_EXPIRATION_MS: ${{ secrets.JWT_EXPIRATION_MS || '3600000' }}
           CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS || 'http://localhost:5173,https://controle-horas.arthurlopes25072005.workers.dev' }}
           FRONTEND_PORT: ${{ secrets.FRONTEND_PORT || '80' }}
+          BACKEND_PORT: ${{ secrets.BACKEND_PORT || '8080' }}
           HSTS_ENABLED: 'true'
           GHCR_USERNAME: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -136,6 +137,7 @@ jobs:
           JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS}
           CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
           FRONTEND_PORT=${FRONTEND_PORT}
+          BACKEND_PORT=${BACKEND_PORT}
           HSTS_ENABLED=${HSTS_ENABLED}
           ENVEOF
           chmod 600 .env
