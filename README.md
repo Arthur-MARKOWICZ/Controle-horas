@@ -144,7 +144,7 @@ O deploy atualmente configurado é **temporário** e executa na VM Oracle Cloud.
 
 Essa configuração **não representa o deploy final**: a infraestrutura e o processo de publicação serão revisados antes da versão definitiva. Os detalhes do ambiente atual, incluindo as variáveis e secrets necessários, estão em [docs/deployment.md](docs/deployment.md).
 
-O frontend ocupa a porta interna `80` e, por padrão, a porta `80` da VM (`FRONTEND_PORT=80`). O backend é publicado na porta `8080` (`BACKEND_PORT=8080`). Configure o secret obrigatório `VITE_API_BASE_URL` com a URL pública da API, por exemplo `http://IP_DA_VM:8080`, e configure `CORS_ALLOWED_ORIGINS` com a URL do frontend. Em produção com frontend HTTPS, a API também deve usar HTTPS para não haver bloqueio de mixed content.
+O frontend ocupa a porta interna `80` e, por padrão, a porta `80` da VM (`FRONTEND_PORT=80`). O backend é publicado na porta `8080` (`BACKEND_PORT=8080`). Por padrão, o workflow usa `http://OCI_VM_HOST:8080` como URL da API. Se necessário, configure o secret opcional `VITE_API_BASE_URL` com a URL pública raiz da API, sem o sufixo `/api`; os serviços adicionam `/api` aos endpoints. Configure também `CORS_ALLOWED_ORIGINS` com a URL do frontend. Em produção com frontend HTTPS, a API também deve usar HTTPS para não haver bloqueio de mixed content.
 
 ## Documentação adicional
 

@@ -7,7 +7,7 @@ Browser -- HTTP/HTTPS --> Nginx (Oracle VM :80) -- frontend
 Browser -- HTTP/HTTPS --> Spring Boot (Oracle VM :8080) -- TLS --> Neon PostgreSQL
 ```
 
-Defina `VITE_API_BASE_URL` nos GitHub Actions secrets com a URL publica do backend, incluindo a porta. Exemplo: `http://IP_DA_VM:8080`. Esse valor e obrigatorio durante o build do frontend e e incorporado ao JavaScript distribuido ao navegador; ele nao deve conter dados sigilosos.
+Opcionalmente, defina `VITE_API_BASE_URL` nos GitHub Actions secrets com a URL publica raiz do backend, incluindo a porta e sem o sufixo `/api`. Exemplo: `http://IP_DA_VM:8080`. Quando o secret nao for definido, o workflow usa automaticamente `http://OCI_VM_HOST:8080`. Esse valor e incorporado ao JavaScript distribuido ao navegador; ele nao deve conter dados sigilosos. A aplicacao adiciona `/api` aos endpoints automaticamente.
 
 ## GitHub Actions secrets
 
@@ -24,7 +24,7 @@ Configure os seguintes secrets em `Settings > Secrets and variables > Actions`:
 | `DB_PASSWORD` | Senha do usuario do Neon. |
 | `JWT_SECRET` | Segredo aleatorio de pelo menos 32 bytes. |
 | `CORS_ALLOWED_ORIGINS` | URL HTTPS publica do frontend, por exemplo `https://horas.seudominio.com`. |
-| `VITE_API_BASE_URL` | URL publica do backend, incluindo a porta, por exemplo `http://IP_DA_VM:8080`. |
+| `VITE_API_BASE_URL` | Opcional. URL publica raiz do backend, incluindo a porta e sem `/api`, por exemplo `http://IP_DA_VM:8080`. O padrao usa `OCI_VM_HOST:8080`. |
 
 Opcionalmente, configure `JWT_EXPIRATION_MS` (padrao `3600000`), `FRONTEND_PORT` (padrao `80`) e `BACKEND_PORT` (padrao `8080`). Nao configure `POSTGRES_DB`, `POSTGRES_USER` ou `POSTGRES_PASSWORD`: eles pertenciam ao banco local removido.
 
