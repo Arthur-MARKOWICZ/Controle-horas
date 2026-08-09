@@ -6,11 +6,22 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "controlehoras",
-    "ios": { "supportsTablet": true, "bundleIdentifier": "com.controlehoras.app" },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.controlehoras.app"
+    },
     "android": {
       "package": "com.controlehoras.app",
       "usesCleartextTraffic": true
     },
-    "plugins": ["expo-secure-store", "expo-document-picker"]
+    "plugins": [
+      "expo-secure-store",
+      "expo-document-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "dcc82360-a8fd-4022-a1ec-edd1f6edbddf"
+      }
+    }
   }
 }
