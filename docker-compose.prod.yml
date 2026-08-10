@@ -37,11 +37,11 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://localhost:8080/actuator/health"]
       interval: 10s
       timeout: 5s
-      retries: 36
-      start_period: 120s
+      retries: 3
+      start_period: 30s
 
   frontend:
     image: ${FRONTEND_IMAGE:-ghcr.io/controle_horas_frontend:latest}
@@ -53,11 +53,11 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://localhost:80/"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 10s
+      retries: 3
+      start_period: 15s
 
 volumes:
   controle_horas_postgres_data:

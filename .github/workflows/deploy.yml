@@ -103,7 +103,7 @@ jobs:
             "${{ secrets.OCI_VM_USER }}@${{ secrets.OCI_VM_HOST }}:~/controle-horas/docker-compose.prod.yml"
 
       - name: Deploy application
-        timeout-minutes: 20
+        timeout-minutes: 30
         env:
           BACKEND_IMAGE: ${{ needs.build-and-push-images.outputs.backend-image-name }}:${{ github.sha }}
           FRONTEND_IMAGE: ${{ needs.build-and-push-images.outputs.frontend-image-name }}:${{ github.sha }}
@@ -153,8 +153,10 @@ jobs:
           for attempt in \$(seq 1 36); do
             BACKEND_STATUS=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "\$BACKEND_CONTAINER")
             FRONTEND_STATUS=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "\$FRONTEND_CONTAINER")
+            echo "Attempt \$attempt: Backend=\$BACKEND_STATUS, Frontend=\$FRONTEND_STATUS"
             [ "\$BACKEND_STATUS" = healthy ] && [ "\$FRONTEND_STATUS" = healthy ] && exit 0
             if [ "\$BACKEND_STATUS" = unhealthy ] || [ "\$FRONTEND_STATUS" = unhealthy ]; then
+              echo "Container marked as unhealthy, showing logs..."
               break
             fi
             sleep 5

@@ -12,11 +12,23 @@
     },
     "android": {
       "package": "com.controlehoras.app",
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "splash": {
+        "image": "./assets/android-splash.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#03112B"
+      }
     },
     "plugins": [
       "expo-secure-store",
-      "expo-document-picker"
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permita que o Controle de Horas use o Face ID para entrar mais rápido."
+        }
+      ],
+      "expo-document-picker",
+      "expo-asset"
     ],
     "extra": {
       "eas": {
