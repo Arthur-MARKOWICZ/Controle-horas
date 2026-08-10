@@ -66,13 +66,74 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure SSH
+        env:
+          OCI_VM_HOST: ${{ secrets.OCI_VM_HOST }}
+          OCI_VM_USER: ${{ secrets.OCI_VM_USER }}
+          OCI_VM_PORT: ${{ secrets.OCI_VM_PORT || 22 }}
+          OCI_VM_KEY: ${{ secrets.OCI_VM_KEY }}
         run: |
+          set -Eeuo pipefail
+
+          report_ssh_error() {
+            local failed_line="$1"
+            local exit_code="$2"
+            echo "::error::SSH configuration failed at script line ${failed_line} with exit code ${exit_code}"
+          }
+
+          trap 'report_ssh_error "$LINENO" "$?"' ERR
+
+          for required_variable in OCI_VM_HOST OCI_VM_USER OCI_VM_PORT OCI_VM_KEY; do
+            if [ -z "${!required_variable:-}" ]; then
+              echo "::error::Required SSH variable ${required_variable} is empty"
+              exit 1
+            fi
+          done
+
+          echo "[$(date --iso-8601=seconds)] Configuring SSH for ${OCI_VM_USER}@${OCI_VM_HOST}:${OCI_VM_PORT}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' '${{ secrets.OCI_VM_KEY }}' > ~/.ssh/oci_key
+          printf '%s\n' "$OCI_VM_KEY" | tr -d '\r' > ~/.ssh/oci_key
           chmod 600 ~/.ssh/oci_key
-          ssh-keyscan -p "${{ secrets.OCI_VM_PORT || 22 }}" "${{ secrets.OCI_VM_HOST }}" >> ~/.ssh/known_hosts
+
+          echo "[$(date --iso-8601=seconds)] Validating private key format"
+          KEY_VALIDATION_ERROR="$(mktemp)"
+          if ! ssh-keygen -y -P '' -f ~/.ssh/oci_key > /dev/null 2> "$KEY_VALIDATION_ERROR"; then
+            echo "::error::OCI_VM_KEY is invalid, malformed, or protected by a passphrase"
+            sed 's/^/ssh-keygen: /' "$KEY_VALIDATION_ERROR"
+            rm -f "$KEY_VALIDATION_ERROR"
+            exit 1
+          fi
+          rm -f "$KEY_VALIDATION_ERROR"
+          ssh-keygen -lf ~/.ssh/oci_key
+
+          echo "[$(date --iso-8601=seconds)] Resolving SSH host"
+          getent ahosts "$OCI_VM_HOST" | head -n 5 || echo "::warning::Could not resolve ${OCI_VM_HOST} with getent"
+
+          echo "[$(date --iso-8601=seconds)] Reading SSH host key"
+          HOST_KEYS_FILE="$(mktemp)"
+          KEYSCAN_ERROR="$(mktemp)"
+          KEYSCAN_SUCCEEDED=false
+          for attempt in 1 2 3; do
+            echo "SSH keyscan attempt ${attempt}/3 for ${OCI_VM_HOST}:${OCI_VM_PORT}"
+            if ssh-keyscan -T 15 -H -p "$OCI_VM_PORT" "$OCI_VM_HOST" > "$HOST_KEYS_FILE" 2> "$KEYSCAN_ERROR" \
+              && [ -s "$HOST_KEYS_FILE" ]; then
+              KEYSCAN_SUCCEEDED=true
+              break
+            fi
+            sed 's/^/ssh-keyscan: /' "$KEYSCAN_ERROR"
+            sleep 2
+          done
+
+          if [ "$KEYSCAN_SUCCEEDED" != true ]; then
+            echo "::error::GitHub Actions could not reach SSH at ${OCI_VM_HOST}:${OCI_VM_PORT}. Check the Oracle Security List/NSG, the VM firewall, sshd, and whether port 22 is restricted to your local IP."
+            rm -f "$HOST_KEYS_FILE" "$KEYSCAN_ERROR"
+            exit 1
+          fi
+
+          cat "$HOST_KEYS_FILE" >> ~/.ssh/known_hosts
+          rm -f "$HOST_KEYS_FILE" "$KEYSCAN_ERROR"
           chmod 644 ~/.ssh/known_hosts
+          echo "[$(date --iso-8601=seconds)] SSH configuration completed"
 
       - name: Copy deployment configuration
         run: |
