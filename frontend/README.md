@@ -1,16 +1,24 @@
-# React + Vite
+# Frontend web
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Aplicação React/Vite mantida no repositório, mas temporariamente fora do deploy de produção. Ela não é publicada na VM Oracle nem no Cloudflare.
 
-Currently, two official plugins are available:
+## Desenvolvimento local
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Copie `.env.example` para `.env.local`, mantenha `VITE_API_BASE_URL=http://localhost:8080` e execute:
 
-## React Compiler
+```powershell
+npm ci
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Testes e build
 
-## Expanding the Oxlint configuration
+```powershell
+npm test
+npm run lint
+npm run build
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Produção
+
+Não existe atualmente um comando ou workflow de publicação do frontend. Quando uma hospedagem for definida, configure `VITE_API_BASE_URL` com a URL pública do backend e restaure um pipeline específico para essa plataforma.

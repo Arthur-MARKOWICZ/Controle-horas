@@ -35,17 +35,17 @@ Frontend
 
 Banco
 
-- PostgreSQL (Neon)
+- PostgreSQL em container Docker na Oracle Cloud
 
 Deploy
 
 Frontend
 
-- Cloudflare Pages
+- Temporariamente não publicado
 
 Backend
 
-- Render
+- Oracle Cloud
 
 Versionamento
 

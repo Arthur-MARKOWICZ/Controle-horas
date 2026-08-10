@@ -1,14 +1,11 @@
-name: Deploy application to Oracle Cloud VM
+name: Deploy backend to Oracle Cloud VM
 
 on:
   push:
     branches: [main, master]
     paths:
       - 'back-end/**'
-      - 'frontend/**'
       - 'Dockerfile.backend'
-      - 'Dockerfile.frontend'
-      - 'nginx/**'
       - 'docker-compose.prod.yml'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
@@ -21,12 +18,11 @@ env:
   GHCR_REGISTRY: ghcr.io
 
 jobs:
-  build-and-push-images:
-    name: Build and push application images
+  build-and-push-backend:
+    name: Build and push backend image
     runs-on: ubuntu-latest
     outputs:
       backend-image-name: ${{ steps.images.outputs.backend-name }}
-      frontend-image-name: ${{ steps.images.outputs.frontend-name }}
 
     steps:
       - name: Checkout code
@@ -46,9 +42,7 @@ jobs:
         id: images
         run: |
           BACKEND_IMAGE_NAME="ghcr.io/${{ github.repository }}/backend"
-          FRONTEND_IMAGE_NAME="ghcr.io/${{ github.repository }}/frontend"
           echo "backend-name=$(echo "$BACKEND_IMAGE_NAME" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
-          echo "frontend-name=$(echo "$FRONTEND_IMAGE_NAME" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Build and push backend image
         uses: docker/build-push-action@v6
@@ -62,23 +56,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push frontend image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile.frontend
-          push: true
-          build-args: |
-            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL || format('http://{0}:8080', secrets.OCI_VM_HOST) }}
-          tags: |
-            ${{ steps.images.outputs.frontend-name }}:latest
-            ${{ steps.images.outputs.frontend-name }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   deploy-to-oracle-vm:
-    name: Deploy application to Oracle Cloud VM
-    needs: build-and-push-images
+    name: Deploy backend and database to Oracle Cloud VM
+    needs: build-and-push-backend
     runs-on: ubuntu-latest
 
     steps:
@@ -105,15 +85,13 @@ jobs:
       - name: Deploy application
         timeout-minutes: 30
         env:
-          BACKEND_IMAGE: ${{ needs.build-and-push-images.outputs.backend-image-name }}:${{ github.sha }}
-          FRONTEND_IMAGE: ${{ needs.build-and-push-images.outputs.frontend-image-name }}:${{ github.sha }}
+          BACKEND_IMAGE: ${{ needs.build-and-push-backend.outputs.backend-image-name }}:${{ github.sha }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'controle_horas' }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_EXPIRATION_MS: ${{ secrets.JWT_EXPIRATION_MS || '3600000' }}
-          CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS || 'http://localhost:5173,https://controle-horas.arthurlopes25072005.workers.dev' }}
-          FRONTEND_PORT: ${{ secrets.FRONTEND_PORT || '80' }}
+          CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS || 'http://localhost:5173' }}
           BACKEND_PORT: ${{ secrets.BACKEND_PORT || '8080' }}
           HSTS_ENABLED: 'true'
           GHCR_USERNAME: ${{ github.actor }}
@@ -129,14 +107,12 @@ jobs:
           umask 077
           cat > .env <<ENVEOF
           BACKEND_IMAGE=${BACKEND_IMAGE}
-          FRONTEND_IMAGE=${FRONTEND_IMAGE}
           DB_USERNAME=${DB_USERNAME}
           DB_PASSWORD=${DB_PASSWORD}
           POSTGRES_DB=${POSTGRES_DB}
           JWT_SECRET=${JWT_SECRET}
           JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS}
           CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-          FRONTEND_PORT=${FRONTEND_PORT}
           BACKEND_PORT=${BACKEND_PORT}
           HSTS_ENABLED=${HSTS_ENABLED}
           ENVEOF
@@ -147,22 +123,25 @@ jobs:
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
           BACKEND_CONTAINER=\$(docker compose -f docker-compose.prod.yml ps -q backend)
-          FRONTEND_CONTAINER=\$(docker compose -f docker-compose.prod.yml ps -q frontend)
+          POSTGRES_CONTAINER=\$(docker compose -f docker-compose.prod.yml ps -q postgres)
           test -n "\$BACKEND_CONTAINER"
-          test -n "\$FRONTEND_CONTAINER"
+          test -n "\$POSTGRES_CONTAINER"
           for attempt in \$(seq 1 36); do
             BACKEND_STATUS=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "\$BACKEND_CONTAINER")
-            FRONTEND_STATUS=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "\$FRONTEND_CONTAINER")
-            echo "Attempt \$attempt: Backend=\$BACKEND_STATUS, Frontend=\$FRONTEND_STATUS"
-            [ "\$BACKEND_STATUS" = healthy ] && [ "\$FRONTEND_STATUS" = healthy ] && exit 0
-            if [ "\$BACKEND_STATUS" = unhealthy ] || [ "\$FRONTEND_STATUS" = unhealthy ]; then
+            POSTGRES_STATUS=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "\$POSTGRES_CONTAINER")
+            echo "Attempt \$attempt: Backend=\$BACKEND_STATUS, PostgreSQL=\$POSTGRES_STATUS"
+            if [ "\$BACKEND_STATUS" = healthy ] && [ "\$POSTGRES_STATUS" = healthy ]; then
+              docker image prune -a -f --filter "until=168h"
+              exit 0
+            fi
+            if [ "\$BACKEND_STATUS" = unhealthy ] || [ "\$POSTGRES_STATUS" = unhealthy ]; then
               echo "Container marked as unhealthy, showing logs..."
               break
             fi
             sleep 5
           done
 
-          docker compose -f docker-compose.prod.yml logs --tail=100 backend frontend
+          docker compose -f docker-compose.prod.yml logs --tail=100 postgres backend
           exit 1
           EOF
 

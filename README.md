@@ -140,11 +140,15 @@ Consulte os arquivos `.env.example` de cada aplicação para os valores esperado
 
 ## Deploy atual
 
-O deploy atualmente configurado é **temporário** e executa na VM Oracle Cloud. O GitHub Actions cria imagens Docker do backend e frontend, publica-as no GitHub Container Registry e as atualiza na VM. Nessa topologia, o Nginx serve o frontend e o navegador acessa diretamente o backend pela porta pública `8080`; o PostgreSQL é hospedado no Neon.
+Temporariamente, somente o backend Spring Boot e o PostgreSQL são publicados na VM Oracle. O frontend não faz parte do deploy e não é enviado ao Cloudflare. O código React continua no repositório para desenvolvimento local.
 
-Essa configuração **não representa o deploy final**: a infraestrutura e o processo de publicação serão revisados antes da versão definitiva. Os detalhes do ambiente atual, incluindo as variáveis e secrets necessários, estão em [docs/deployment.md](docs/deployment.md).
+```text
+Cliente da API → Oracle VM :8080 → Spring Boot → PostgreSQL
+```
 
-O frontend ocupa a porta interna `80` e, por padrão, a porta `80` da VM (`FRONTEND_PORT=80`). O backend é publicado na porta `8080` (`BACKEND_PORT=8080`). Por padrão, o workflow usa `http://OCI_VM_HOST:8080` como URL da API. Se necessário, configure o secret opcional `VITE_API_BASE_URL` com a URL pública raiz da API, sem o sufixo `/api`; os serviços adicionam `/api` aos endpoints. Configure também `CORS_ALLOWED_ORIGINS` com a URL do frontend. Em produção com frontend HTTPS, a API também deve usar HTTPS para não haver bloqueio de mixed content.
+Não há Nginx nem container de frontend na VM. O backend continua publicado na porta `8080` para o aplicativo mobile e testes da API. Os limites de memória, pool de conexões e rotação de logs ficam em `docker-compose.prod.yml`.
+
+Os detalhes, secrets e procedimentos de publicação estão em [docs/deployment.md](docs/deployment.md).
 
 ## Documentação adicional
 

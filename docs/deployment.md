@@ -1,44 +1,92 @@
-# Deploy de producao
+# Deploy de produção
 
-O deploy da VM executa PostgreSQL, o backend Spring Boot e o frontend React. O PostgreSQL roda em um container privado na mesma rede Docker; somente o frontend e a API sao publicados na VM.
+## Arquitetura temporária
+
+O deploy de produção executa somente PostgreSQL e o backend Spring Boot na VM Oracle.
 
 ```text
-Browser -- HTTP/HTTPS --> Nginx (Oracle VM :80) -- frontend
-Browser -- HTTP/HTTPS --> Spring Boot (Oracle VM :8080) --> PostgreSQL (Docker network)
+Aplicativo mobile / cliente da API
+               |
+               +-- HTTP :8080 --> Spring Boot --> PostgreSQL
+                                  Oracle VM       Docker privado
 ```
 
-Opcionalmente, defina `VITE_API_BASE_URL` nos GitHub Actions secrets com a URL publica raiz do backend, incluindo a porta e sem o sufixo `/api`. Exemplo: `http://IP_DA_VM:8080`. Quando o secret nao for definido, o workflow usa automaticamente `http://OCI_VM_HOST:8080`. Esse valor e incorporado ao JavaScript distribuido ao navegador; ele nao deve conter dados sigilosos. A aplicacao adiciona `/api` aos endpoints automaticamente.
+O frontend React está temporariamente fora do deploy. Ele não é enviado ao Cloudflare e não existe container de frontend ou Nginx na VM.
+
+## Processo de deploy
+
+O workflow `.github/workflows/deploy.yml`:
+
+1. cria somente a imagem Docker do backend;
+2. publica a imagem no GitHub Container Registry;
+3. copia `docker-compose.prod.yml` para a VM;
+4. atualiza os containers `postgres` e `backend` sem remover o volume do banco;
+5. aguarda os health checks;
+6. remove imagens Docker não utilizadas há mais de sete dias.
+
+O comando `docker compose up -d --remove-orphans` também remove o antigo container de frontend quando esta configuração é aplicada na VM.
 
 ## GitHub Actions secrets
 
-Configure os seguintes secrets em `Settings > Secrets and variables > Actions`:
-
 | Secret | Valor |
 | --- | --- |
-| `OCI_VM_HOST` | IP publico ou DNS da VM Oracle. |
-| `OCI_VM_USER` | Usuario SSH da VM. |
+| `OCI_VM_HOST` | IP público ou DNS da VM Oracle. |
+| `OCI_VM_USER` | Usuário SSH da VM. |
 | `OCI_VM_PORT` | Porta SSH; normalmente `22`. |
-| `OCI_VM_KEY` | Chave privada SSH completa em formato PEM/OpenSSH. |
-| `DB_USERNAME` | Usuario do PostgreSQL local, por exemplo `controle_horas`. |
-| `DB_PASSWORD` | Senha forte do PostgreSQL local. |
-| `POSTGRES_DB` | Opcional. Nome do banco; o padrao e `controle_horas`. |
-| `JWT_SECRET` | Segredo aleatorio de pelo menos 32 bytes. |
-| `CORS_ALLOWED_ORIGINS` | URL HTTPS publica do frontend, por exemplo `https://horas.seudominio.com`. |
-| `VITE_API_BASE_URL` | Opcional. URL publica raiz do backend, incluindo a porta e sem `/api`, por exemplo `http://IP_DA_VM:8080`. O padrao usa `OCI_VM_HOST:8080`. |
+| `OCI_VM_KEY` | Chave privada SSH completa. |
+| `DB_USERNAME` | Usuário do PostgreSQL. |
+| `DB_PASSWORD` | Senha forte do PostgreSQL. |
+| `POSTGRES_DB` | Opcional; padrão `controle_horas`. |
+| `JWT_SECRET` | Segredo aleatório de pelo menos 32 bytes. |
+| `JWT_EXPIRATION_MS` | Opcional; padrão `3600000`. |
+| `CORS_ALLOWED_ORIGINS` | Opcional enquanto não há frontend publicado. |
+| `BACKEND_PORT` | Opcional; padrão `8080`. |
 
-Opcionalmente, configure `JWT_EXPIRATION_MS` (padrao `3600000`), `FRONTEND_PORT` (padrao `80`) e `BACKEND_PORT` (padrao `8080`). O banco e persistido no volume Docker `controle_horas_postgres_data`; ele nao e exposto em porta publica.
+Na Oracle Cloud, mantenha a entrada TCP `8080` liberada apenas para os clientes que precisam acessar a API. A porta `80` não é necessária para esta aplicação.
 
-`GITHUB_TOKEN` e fornecido automaticamente pelo GitHub Actions; nao crie um secret para ele. Os pacotes de backend e frontend no GHCR precisam estar publicos, ou o token usado pela VM deve ter permissao de leitura de pacotes.
+## Otimizações de recursos
 
-## Banco local, DNS e HTTPS
+O banco continua PostgreSQL para preservar os dados existentes, as migrations Flyway e o comportamento correto em acessos concorrentes. Trocar para SQLite exigiria uma migração de dados e reduziria a segurança operacional sem resolver necessariamente o maior consumo, que normalmente está no processo Java.
 
-1. Configure `DB_USERNAME`, `DB_PASSWORD` e, se desejar, `POSTGRES_DB` nos secrets do GitHub Actions. O backend usa automaticamente `jdbc:postgresql://postgres:5432/<POSTGRES_DB>`.
-2. Crie um registro DNS `A` ou `AAAA` para o dominio do frontend, apontando para a VM.
-3. Na Security List/NSG da Oracle, libere TCP nas portas configuradas em `FRONTEND_PORT` e `BACKEND_PORT`.
-4. Configure TLS no proxy/rede que estiver na frente da VM e use a URL HTTPS correspondente em `CORS_ALLOWED_ORIGINS`.
+| Variável | Padrão | Finalidade |
+| --- | --- | --- |
+| `POSTGRES_MEMORY_LIMIT` | `256m` | Limite do container PostgreSQL. |
+| `POSTGRES_MAX_CONNECTIONS` | `30` | Limite de conexões do servidor. |
+| `POSTGRES_SHARED_BUFFERS` | `64MB` | Cache compartilhado do PostgreSQL. |
+| `POSTGRES_EFFECTIVE_CACHE_SIZE` | `192MB` | Estimativa de cache para o planejador. |
+| `POSTGRES_MAINTENANCE_WORK_MEM` | `32MB` | Memória para manutenção e migrations. |
+| `POSTGRES_WORK_MEM` | `2MB` | Memória por ordenação ou operação de hash. |
+| `BACKEND_MEMORY_LIMIT` | `512m` | Limite do container Spring Boot. |
+| `DB_MAX_POOL_SIZE` | `5` | Máximo de conexões Hikari. |
+| `DB_MIN_IDLE` | `1` | Conexão mínima ociosa. |
 
-O backend valida a origem do frontend. Inclua no `CORS_ALLOWED_ORIGINS` somente URLs HTTPS permitidas; nunca use `*` com credenciais habilitadas. Se o frontend estiver em HTTPS, a API tambem deve estar em HTTPS para evitar bloqueio de mixed content no navegador.
+Os logs dos dois containers são rotacionados em três arquivos de até 10 MB. O Java usa Serial GC e respeita o limite do container.
 
-## Primeira execucao e migracao
+## Verificação
 
-No primeiro deploy, o PostgreSQL cria um banco vazio e o Flyway do backend aplica as migrations automaticamente. Para preservar dados existentes, importe-os antes de iniciar este deploy. O `docker compose up --remove-orphans` nao remove o volume `controle_horas_postgres_data`.
+Após o deploy:
+
+```bash
+cd ~/controle-horas
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs --tail=100 postgres backend
+curl --fail http://localhost:8080/actuator/health
+free -h
+df -h
+docker stats --no-stream
+```
+
+Não execute `docker compose down -v` em produção. A opção `-v` remove o volume persistente do PostgreSQL.
+
+## Frontend local
+
+O frontend continua disponível para desenvolvimento:
+
+```powershell
+cd frontend
+Copy-Item .env.example .env.local
+npm ci
+npm run dev
+```
+
+Não há workflow nem comando de deploy do frontend enquanto a hospedagem estiver desativada.
