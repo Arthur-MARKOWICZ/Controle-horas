@@ -100,50 +100,142 @@ jobs:
           OCI_VM_USER: ${{ secrets.OCI_VM_USER }}
           OCI_VM_PORT: ${{ secrets.OCI_VM_PORT || 22 }}
         run: |
-          ssh -i ~/.ssh/oci_key -p "$OCI_VM_PORT" -o ConnectTimeout=30 \
-            "$OCI_VM_USER@$OCI_VM_HOST" "bash -s" <<EOF
-          set -eu
-          cd ~/controle-horas
+          set -Eeuo pipefail
+          DEPLOY_ENV_FILE="$(mktemp)"
+
+          report_runner_error() {
+            local failed_line="$1"
+            local exit_code="$2"
+            echo "::error::Deployment runner failed at script line ${failed_line} with exit code ${exit_code}"
+          }
+
+          trap 'report_runner_error "$LINENO" "$?"' ERR
+          trap 'rm -f "$DEPLOY_ENV_FILE"' EXIT
           umask 077
-          cat > .env <<ENVEOF
-          BACKEND_IMAGE=${BACKEND_IMAGE}
-          DB_USERNAME=${DB_USERNAME}
-          DB_PASSWORD=${DB_PASSWORD}
-          POSTGRES_DB=${POSTGRES_DB}
-          JWT_SECRET=${JWT_SECRET}
-          JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS}
-          CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-          BACKEND_PORT=${BACKEND_PORT}
-          HSTS_ENABLED=${HSTS_ENABLED}
-          ENVEOF
+
+          for required_variable in BACKEND_IMAGE DB_USERNAME DB_PASSWORD POSTGRES_DB JWT_SECRET OCI_VM_HOST OCI_VM_USER OCI_VM_PORT; do
+            if [ -z "${!required_variable:-}" ]; then
+              echo "::error::Required deployment variable ${required_variable} is empty"
+              exit 1
+            fi
+          done
+
+          echo "[$(date --iso-8601=seconds)] Preparing deployment environment"
+          {
+            printf 'BACKEND_IMAGE=%s\n' "$BACKEND_IMAGE"
+            printf 'DB_USERNAME=%s\n' "$DB_USERNAME"
+            printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
+            printf 'POSTGRES_DB=%s\n' "$POSTGRES_DB"
+            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
+            printf 'JWT_EXPIRATION_MS=%s\n' "$JWT_EXPIRATION_MS"
+            printf 'CORS_ALLOWED_ORIGINS=%s\n' "$CORS_ALLOWED_ORIGINS"
+            printf 'BACKEND_PORT=%s\n' "$BACKEND_PORT"
+            printf 'HSTS_ENABLED=%s\n' "$HSTS_ENABLED"
+          } > "$DEPLOY_ENV_FILE"
+
+          echo "[$(date --iso-8601=seconds)] Uploading deployment environment"
+          scp -i ~/.ssh/oci_key -P "$OCI_VM_PORT" -o ConnectTimeout=30 \
+            "$DEPLOY_ENV_FILE" "$OCI_VM_USER@$OCI_VM_HOST:~/controle-horas/.env"
+
+          echo "[$(date --iso-8601=seconds)] Authenticating VM in GHCR"
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/oci_key -p "$OCI_VM_PORT" -o ConnectTimeout=30 \
+            "$OCI_VM_USER@$OCI_VM_HOST" "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
+
+          echo "[$(date --iso-8601=seconds)] Starting remote deployment"
+          ssh -i ~/.ssh/oci_key -p "$OCI_VM_PORT" -o ConnectTimeout=30 \
+            "$OCI_VM_USER@$OCI_VM_HOST" "bash -se" <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
+          COMPOSE_FILE="docker-compose.prod.yml"
+
+          log() {
+            printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*"
+          }
+
+          collect_diagnostics() {
+            local failed_line="$1"
+            local exit_code="$2"
+            trap - ERR
+            set +e
+
+            echo "::group::Deployment diagnostics"
+            log "Deployment failed at remote script line ${failed_line} with exit code ${exit_code}"
+            log "Host and system load"
+            hostname
+            uptime
+            free -h
+            df -h
+            df -i
+
+            log "Docker versions and storage"
+            docker --version
+            docker compose version
+            docker system df
+
+            log "Compose services and container states"
+            docker compose -f "$COMPOSE_FILE" config --services
+            docker compose -f "$COMPOSE_FILE" ps -a
+            docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+            docker stats --no-stream
+
+            log "PostgreSQL and backend logs (last 200 lines)"
+            docker compose -f "$COMPOSE_FILE" logs --no-color --timestamps --tail=200 postgres backend
+            echo "::endgroup::"
+            exit "$exit_code"
+          }
+
+          trap 'collect_diagnostics "$LINENO" "$?"' ERR
+
+          cd ~/controle-horas
           chmod 600 .env
 
-          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
-          docker compose -f docker-compose.prod.yml pull
-          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          log "Remote preflight"
+          log "Host: $(hostname); user: $(id -un); directory: $(pwd)"
+          docker --version
+          docker compose version
+          log "Deployment environment received with restricted permissions"
+          log "Memory before deploy"
+          free -h
+          log "Disk before deploy"
+          df -h
+          docker system df
 
-          BACKEND_CONTAINER=\$(docker compose -f docker-compose.prod.yml ps -q backend)
-          POSTGRES_CONTAINER=\$(docker compose -f docker-compose.prod.yml ps -q postgres)
-          test -n "\$BACKEND_CONTAINER"
-          test -n "\$POSTGRES_CONTAINER"
-          for attempt in \$(seq 1 36); do
-            BACKEND_STATUS=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "\$BACKEND_CONTAINER")
-            POSTGRES_STATUS=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "\$POSTGRES_CONTAINER")
-            echo "Attempt \$attempt: Backend=\$BACKEND_STATUS, PostgreSQL=\$POSTGRES_STATUS"
-            if [ "\$BACKEND_STATUS" = healthy ] && [ "\$POSTGRES_STATUS" = healthy ]; then
-              docker image prune -a -f --filter "until=168h"
+          log "Pulling backend and PostgreSQL images"
+          docker compose -f "$COMPOSE_FILE" pull
+
+          log "Starting containers and removing obsolete services"
+          docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+          docker compose -f "$COMPOSE_FILE" ps -a
+
+          BACKEND_CONTAINER=$(docker compose -f "$COMPOSE_FILE" ps -q backend)
+          POSTGRES_CONTAINER=$(docker compose -f "$COMPOSE_FILE" ps -q postgres)
+          test -n "$BACKEND_CONTAINER"
+          test -n "$POSTGRES_CONTAINER"
+
+          log "Waiting for health checks"
+          for attempt in $(seq 1 36); do
+            BACKEND_STATE=$(docker inspect --format='{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$BACKEND_CONTAINER")
+            POSTGRES_STATE=$(docker inspect --format='{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$POSTGRES_CONTAINER")
+            log "Health attempt ${attempt}/36: backend=${BACKEND_STATE}, postgres=${POSTGRES_STATE}"
+
+            if [ "$BACKEND_STATE" = "running/healthy" ] && [ "$POSTGRES_STATE" = "running/healthy" ]; then
+              log "Deployment completed successfully"
+              docker compose -f "$COMPOSE_FILE" ps
+              docker image prune -a -f --filter "until=168h" || log "Image cleanup failed without affecting deployment"
               exit 0
             fi
-            if [ "\$BACKEND_STATUS" = unhealthy ] || [ "\$POSTGRES_STATUS" = unhealthy ]; then
-              echo "Container marked as unhealthy, showing logs..."
-              break
+
+            if [[ "$BACKEND_STATE" == */unhealthy ]] || [[ "$POSTGRES_STATE" == */unhealthy ]] \
+              || [[ "$BACKEND_STATE" == exited/* ]] || [[ "$POSTGRES_STATE" == exited/* ]]; then
+              log "A required container stopped or became unhealthy"
+              collect_diagnostics "$LINENO" 1
             fi
+
             sleep 5
           done
 
-          docker compose -f docker-compose.prod.yml logs --tail=100 postgres backend
-          exit 1
-          EOF
+          log "Health-check timeout after 180 seconds"
+          collect_diagnostics "$LINENO" 1
+          REMOTE_SCRIPT
 
       - name: Clean up SSH credentials
         if: always()

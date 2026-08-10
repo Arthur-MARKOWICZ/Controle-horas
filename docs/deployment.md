@@ -76,6 +76,16 @@ df -h
 docker stats --no-stream
 ```
 
+O workflow registra cada fase com data e hora. Quando uma etapa remota falha, o GitHub Actions exibe automaticamente um grupo `Deployment diagnostics` contendo:
+
+- linha e código da falha;
+- carga, memória, disco e inodes da VM;
+- versões e uso de armazenamento do Docker;
+- estado e consumo dos containers;
+- as 200 linhas mais recentes dos logs do PostgreSQL e backend.
+
+Os valores do `.env`, senhas, JWT e token do GHCR não são impressos. O arquivo de ambiente é criado com permissão restrita e enviado separadamente por SCP para evitar que caracteres especiais dos secrets sejam reinterpretados pelo shell remoto.
+
 Não execute `docker compose down -v` em produção. A opção `-v` remove o volume persistente do PostgreSQL.
 
 ## Frontend local
