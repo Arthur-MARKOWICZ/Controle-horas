@@ -109,39 +109,41 @@ jobs:
           echo "[$(date --iso-8601=seconds)] Resolving SSH host"
           getent ahosts "$OCI_VM_HOST" | head -n 5 || echo "::warning::Could not resolve ${OCI_VM_HOST} with getent"
 
-          echo "[$(date --iso-8601=seconds)] Reading SSH host key"
-          HOST_KEYS_FILE="$(mktemp)"
-          KEYSCAN_ERROR="$(mktemp)"
-          KEYSCAN_SUCCEEDED=false
-          for attempt in 1 2 3; do
-            echo "SSH keyscan attempt ${attempt}/3 for ${OCI_VM_HOST}:${OCI_VM_PORT}"
-            if ssh-keyscan -T 15 -H -p "$OCI_VM_PORT" "$OCI_VM_HOST" > "$HOST_KEYS_FILE" 2> "$KEYSCAN_ERROR" \
-              && [ -s "$HOST_KEYS_FILE" ]; then
-              KEYSCAN_SUCCEEDED=true
-              break
-            fi
-            sed 's/^/ssh-keyscan: /' "$KEYSCAN_ERROR"
-            sleep 2
-          done
-
-          if [ "$KEYSCAN_SUCCEEDED" != true ]; then
-            echo "::error::GitHub Actions could not reach SSH at ${OCI_VM_HOST}:${OCI_VM_PORT}. Check the Oracle Security List/NSG, the VM firewall, sshd, and whether port 22 is restricted to your local IP."
-            rm -f "$HOST_KEYS_FILE" "$KEYSCAN_ERROR"
-            exit 1
-          fi
-
-          cat "$HOST_KEYS_FILE" >> ~/.ssh/known_hosts
-          rm -f "$HOST_KEYS_FILE" "$KEYSCAN_ERROR"
+          echo "[$(date --iso-8601=seconds)] Creating SSH client configuration"
+          cat > ~/.ssh/config <<SSH_CONFIG
+          Host oracle-deploy
+            HostName ${OCI_VM_HOST}
+            User ${OCI_VM_USER}
+            Port ${OCI_VM_PORT}
+            IdentityFile ~/.ssh/oci_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking accept-new
+            UserKnownHostsFile ~/.ssh/known_hosts
+            ConnectTimeout 90
+            ConnectionAttempts 3
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
+            LogLevel VERBOSE
+          SSH_CONFIG
+          chmod 600 ~/.ssh/config
+          touch ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+
+          echo "[$(date --iso-8601=seconds)] Testing a real SSH connection"
+          if command -v nc > /dev/null 2>&1; then
+            nc -vz -w 15 "$OCI_VM_HOST" "$OCI_VM_PORT" \
+              || echo "::warning::Direct TCP test could not connect to ${OCI_VM_HOST}:${OCI_VM_PORT}; SSH will still perform the definitive test"
+          fi
+          ssh -v oracle-deploy "echo 'SSH connection established'; hostname; uptime"
           echo "[$(date --iso-8601=seconds)] SSH configuration completed"
 
       - name: Copy deployment configuration
         run: |
-          ssh -i ~/.ssh/oci_key -p "${{ secrets.OCI_VM_PORT || 22 }}" -o ConnectTimeout=30 \
-            "${{ secrets.OCI_VM_USER }}@${{ secrets.OCI_VM_HOST }}" "mkdir -p ~/controle-horas"
-          scp -i ~/.ssh/oci_key -P "${{ secrets.OCI_VM_PORT || 22 }}" -o ConnectTimeout=30 \
-            docker-compose.prod.yml \
-            "${{ secrets.OCI_VM_USER }}@${{ secrets.OCI_VM_HOST }}:~/controle-horas/docker-compose.prod.yml"
+          set -Eeuo pipefail
+          echo "[$(date --iso-8601=seconds)] Creating remote deployment directory"
+          ssh oracle-deploy "mkdir -p ~/controle-horas"
+          echo "[$(date --iso-8601=seconds)] Uploading Docker Compose configuration"
+          scp docker-compose.prod.yml oracle-deploy:~/controle-horas/docker-compose.prod.yml
 
       - name: Deploy application
         timeout-minutes: 30
@@ -195,16 +197,13 @@ jobs:
           } > "$DEPLOY_ENV_FILE"
 
           echo "[$(date --iso-8601=seconds)] Uploading deployment environment"
-          scp -i ~/.ssh/oci_key -P "$OCI_VM_PORT" -o ConnectTimeout=30 \
-            "$DEPLOY_ENV_FILE" "$OCI_VM_USER@$OCI_VM_HOST:~/controle-horas/.env"
+          scp "$DEPLOY_ENV_FILE" oracle-deploy:~/controle-horas/.env
 
           echo "[$(date --iso-8601=seconds)] Authenticating VM in GHCR"
-          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/oci_key -p "$OCI_VM_PORT" -o ConnectTimeout=30 \
-            "$OCI_VM_USER@$OCI_VM_HOST" "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
+          printf '%s' "$GHCR_TOKEN" | ssh oracle-deploy "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
 
           echo "[$(date --iso-8601=seconds)] Starting remote deployment"
-          ssh -i ~/.ssh/oci_key -p "$OCI_VM_PORT" -o ConnectTimeout=30 \
-            "$OCI_VM_USER@$OCI_VM_HOST" "bash -se" <<'REMOTE_SCRIPT'
+          ssh oracle-deploy "bash -se" <<'REMOTE_SCRIPT'
           set -Eeuo pipefail
           COMPOSE_FILE="docker-compose.prod.yml"
 

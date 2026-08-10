@@ -86,7 +86,7 @@ O workflow registra cada fase com data e hora. Quando uma etapa remota falha, o 
 
 Os valores do `.env`, senhas, JWT e token do GHCR não são impressos. O arquivo de ambiente é criado com permissão restrita e enviado separadamente por SCP para evitar que caracteres especiais dos secrets sejam reinterpretados pelo shell remoto.
 
-Na etapa `Configure SSH`, o workflow também valida se os secrets estão preenchidos, remove finais de linha incompatíveis da chave, verifica o formato da chave privada, resolve o host e tenta ler a chave pública do servidor três vezes. Se a chave funciona localmente, mas o `ssh-keyscan` do GitHub falha, verifique se a regra de entrada TCP `22` da Security List/NSG ou o firewall da VM está limitado apenas ao seu IP local.
+Na etapa `Configure SSH`, o workflow valida se os secrets estão preenchidos, remove finais de linha incompatíveis da chave, verifica o formato da chave privada, resolve o host e testa uma conexão SSH real. A primeira conexão usa `StrictHostKeyChecking=accept-new`, registra a chave do servidor e rejeita alterações posteriores. O timeout é de 90 segundos e o log verboso diferencia falhas de rede, recusa de conexão e autenticação.
 
 Não execute `docker compose down -v` em produção. A opção `-v` remove o volume persistente do PostgreSQL.
 
