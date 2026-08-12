@@ -116,6 +116,29 @@ jobs:
               exit 1
             fi
           done
+          node <<'NODE'
+          let databaseUrl
+          try {
+            databaseUrl = new URL(process.env.DATABASE_URL)
+          } catch {
+            throw new Error('DATABASE_URL must be a valid PostgreSQL URL')
+          }
+          const username = decodeURIComponent(databaseUrl.username)
+          const password = decodeURIComponent(databaseUrl.password)
+          const database = decodeURIComponent(databaseUrl.pathname.replace(/^\//, ''))
+          if (username !== process.env.DB_USERNAME) {
+            throw new Error('DATABASE_URL username must match DB_USERNAME')
+          }
+          if (password !== process.env.DB_PASSWORD) {
+            throw new Error('DATABASE_URL password must match DB_PASSWORD')
+          }
+          if (databaseUrl.hostname !== 'postgres') {
+            throw new Error('DATABASE_URL hostname must be postgres')
+          }
+          if (database !== process.env.POSTGRES_DB) {
+            throw new Error('DATABASE_URL database must match POSTGRES_DB')
+          }
+          NODE
           write_env() {
             local key="$1" value="$2" escaped
             escaped=${value//\\/\\\\}
