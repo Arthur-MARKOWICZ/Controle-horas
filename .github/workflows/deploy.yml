@@ -128,6 +128,18 @@ jobs:
           ssh controle-horas 'mkdir -p ~/controle-horas'
           scp docker-compose.prod.yml controle-horas:~/controle-horas/
           scp "$env_file" controle-horas:~/controle-horas/.env
+          ssh controle-horas '
+            set -eu
+            cd ~/controle-horas
+            docker compose -f docker-compose.prod.yml config --quiet
+            services=$(docker compose -f docker-compose.prod.yml config --services)
+            for required in postgres backend nginx; do
+              printf "%s\n" "$services" | grep -qx "$required" || {
+                printf "Uploaded Compose is missing required service: %s\n" "$required" >&2
+                exit 1
+              }
+            done
+          '
 
       - name: Start PostgreSQL and create verified backup
         shell: bash
@@ -177,4 +189,17 @@ jobs:
 
       - name: Diagnostics
         if: failure()
-        run: ssh controle-horas 'cd ~/controle-horas && docker compose -f docker-compose.prod.yml ps -a && docker compose -f docker-compose.prod.yml logs --tail=200 postgres backend nginx'
+        shell: bash
+        run: |
+          set +e
+          ssh controle-horas '
+            cd ~/controle-horas || exit 0
+            test -f docker-compose.prod.yml || exit 0
+            services=$(docker compose -f docker-compose.prod.yml config --services 2>/dev/null)
+            docker compose -f docker-compose.prod.yml ps -a
+            if test -n "$services"; then
+              docker compose -f docker-compose.prod.yml logs --tail=200 $services
+            fi
+            exit 0
+          '
+          exit 0
