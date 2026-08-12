@@ -105,8 +105,16 @@ jobs:
           umask 077
           env_file=$(mktemp)
           trap 'rm -f "$env_file"' EXIT
-          for name in BACKEND_IMAGE FRONTEND_IMAGE DATABASE_URL DB_USERNAME DB_PASSWORD JWT_ACCESS_SECRET JWT_REFRESH_SECRET; do
-            test -n "${!name}"
+          for name in BACKEND_IMAGE FRONTEND_IMAGE DATABASE_URL DB_USERNAME DB_PASSWORD POSTGRES_DB JWT_ACCESS_SECRET JWT_REFRESH_SECRET; do
+            value=${!name}
+            if test -z "$value"; then
+              printf "Required production value is missing: %s\n" "$name" >&2
+              exit 1
+            fi
+            if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+              printf "Production value must be a single line: %s\n" "$name" >&2
+              exit 1
+            fi
           done
           write_env() {
             local key="$1" value="$2" escaped
