@@ -10,8 +10,10 @@ async function loadDotEnvIfPresent(): Promise<void> {
   for (const line of content.split(/\r?\n/)) {
     const match = line.match(/^\s*([^#=]+?)\s*=\s*(.*)\s*$/)
     if (!match) continue
-    const key = match[1].trim()
-    let val = match[2].trim()
+    const [, rawKey, rawValue] = match
+    if (rawKey === undefined || rawValue === undefined) continue
+    const key = rawKey.trim()
+    let val = rawValue.trim()
     if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1)
     }
