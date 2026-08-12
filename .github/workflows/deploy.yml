@@ -151,8 +151,11 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
         run: |
           set -euo pipefail
+          if test -z "$BACKUP_PASSPHRASE"; then
+            printf "Required production secret is missing: BACKUP_PASSPHRASE\n" >&2
+            exit 1
+          fi
           sudo apt-get update -qq && sudo apt-get install -y postgresql-client
-          test -n "$BACKUP_PASSPHRASE"
           printf '%s' "$GHCR_TOKEN" | ssh controle-horas "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
           ssh controle-horas 'cd ~/controle-horas && chmod 600 .env && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d postgres'
           for attempt in $(seq 1 30); do
