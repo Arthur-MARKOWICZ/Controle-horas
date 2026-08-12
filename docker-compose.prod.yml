@@ -1,24 +1,18 @@
 name: controle_horas_prod
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: controle_horas_postgres
     restart: unless-stopped
     mem_limit: ${POSTGRES_MEMORY_LIMIT:-256m}
-    shm_size: 128mb
-    command:
-      - postgres
-      - -c
-      - max_connections=${POSTGRES_MAX_CONNECTIONS:-30}
-      - -c
-      - shared_buffers=${POSTGRES_SHARED_BUFFERS:-64MB}
-      - -c
-      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-192MB}
-      - -c
-      - maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-32MB}
-      - -c
-      - work_mem=${POSTGRES_WORK_MEM:-2MB}
+    shm_size: 64mb
+    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-20}", "-c", "shared_buffers=64MB", "-c", "work_mem=2MB"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-controle_horas}
       POSTGRES_USER: ${DB_USERNAME:?DB_USERNAME is required}
@@ -27,49 +21,50 @@ services:
       - controle_horas_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 12
-      start_period: 20s
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
+      retries: 20
+    logging: *default-logging
 
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/controle_horas_backend:latest}
-    container_name: controle_horas_backend
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
     restart: unless-stopped
-    mem_limit: ${BACKEND_MEMORY_LIMIT:-512m}
-    ports:
-      - "${BACKEND_PORT:-8080}:8080"
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-256m}
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-controle_horas}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_MAX_POOL_SIZE: ${DB_MAX_POOL_SIZE:-5}
-      DB_MIN_IDLE: ${DB_MIN_IDLE:-1}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
-      HSTS_ENABLED: ${HSTS_ENABLED:-true}
-      SERVER_PORT: 8080
-      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70.0 -XX:InitialRAMPercentage=20.0 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DB_POOL_MAX: ${DB_POOL_MAX:-5}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      JWT_REFRESH_TTL_SECONDS: ${JWT_REFRESH_TTL_SECONDS:-2592000}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-10}
+      COOKIE_SECURE: "false"
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      TIME_ZONE: America/Sao_Paulo
+      PORT: 8080
+      NODE_ENV: production
+      OPENAPI_ENABLED: ${OPENAPI_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://localhost:8080/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    logging: *default-logging
+
+  nginx:
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}
+    restart: unless-stopped
+    mem_limit: ${NGINX_MEMORY_LIMIT:-32m}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging: *default-logging
 
 volumes:
   controle_horas_postgres_data:

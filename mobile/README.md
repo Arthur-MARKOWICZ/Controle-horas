@@ -1,44 +1,37 @@
 # Controle de Horas Mobile
 
-Aplicativo React Native/Expo que consome a API do monorepo.
+Aplicativo React Native/Expo que consome a API Fastify do monorepo.
 
-## Execução com Docker (recomendado)
+## Autenticação
 
-Na raiz do repositório, com o Docker Desktop em execução:
+- Android/iOS usam `/api/auth/mobile/*`.
+- Access e refresh tokens ficam separados no `SecureStore`.
+- O refresh token é rotacionado em cada renovação.
+- A biometria protege o refresh token e sempre cria uma sessão nova.
+- Expo Web usa os endpoints web e o cookie `HttpOnly`.
+
+## Execução
 
 ```powershell
-docker compose -f docker-compose.local.yml up --build
+npm ci
+npm start
 ```
 
-Esse comando inicia PostgreSQL, a API Spring Boot e a versão web do Expo sem criar nenhum arquivo `.env`. Abra [http://localhost:8081](http://localhost:8081) no navegador para testar.
+Defina `EXPO_PUBLIC_API_BASE_URL` em `.env`. No emulador Android com o Compose local, use `http://10.0.2.2:8080`. Em dispositivo físico, use o endereço da máquina acessível na rede.
 
-Para iniciar a versão nativa no emulador Android em vez da web:
+Na raiz do repositório, o perfil nativo inicia Expo na porta 8081:
 
 ```powershell
 docker compose -f docker-compose.local.yml --profile native up --build
 ```
 
-A API nativa já está configurada como `http://10.0.2.2:8080`, que é o endereço do computador visto pelo emulador Android.
+O web React oficial fica em `http://localhost:8080`; o perfil Expo é destinado ao cliente nativo.
 
-Para parar os serviços, use `Ctrl+C`. Para remover também os dados locais do banco:
+## Validação
 
 ```powershell
-docker compose -f docker-compose.local.yml down -v
+npm test
+npx expo export --platform web
 ```
 
-## Configuração manual
-
-1. Copie `.env.example` para `.env` e defina `EXPO_PUBLIC_API_BASE_URL`.
-2. Execute `npm install`.
-3. Execute `npm start`.
-
-Em dispositivo físico, a URL da API precisa ser acessível pela rede. Em produção, use HTTPS.
-
-## Comandos
-
-- `npm run android`
-- `npm run ios`
-- `npm run web`
-- `npm test`
-
-Os builds EAS estão definidos em `eas.json` para desenvolvimento, distribuição interna e produção.
+Os builds EAS permanecem definidos em `eas.json`. A produção atual foi explicitamente configurada para HTTP; isso não oferece confidencialidade de transporte.

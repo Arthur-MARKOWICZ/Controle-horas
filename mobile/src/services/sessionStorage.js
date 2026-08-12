@@ -1,56 +1,53 @@
 import { Platform } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
 
-const TOKEN_KEY = 'controle_horas_token'
+const ACCESS_TOKEN_KEY = 'controle_horas_access_token'
+const REFRESH_TOKEN_KEY = 'controle_horas_refresh_token'
 const USER_KEY = 'controle_horas_user'
+let webAccessToken = null
 
-function browserStorage() {
-  return globalThis.localStorage
+function browserStorage() { return globalThis.localStorage }
+function parseUser(rawUser) {
+  try { return rawUser ? JSON.parse(rawUser) : null } catch { return null }
 }
 
 export async function readSession() {
   if (Platform.OS === 'web') {
-    const token = browserStorage().getItem(TOKEN_KEY)
-    const rawUser = browserStorage().getItem(USER_KEY)
-    try {
-      return { token, user: rawUser ? JSON.parse(rawUser) : null }
-    } catch {
-      browserStorage().removeItem(USER_KEY)
-      return { token, user: null }
-    }
+    return { token: webAccessToken, refreshToken: null, user: parseUser(browserStorage().getItem(USER_KEY)) }
   }
-
-  const [token, rawUser] = await Promise.all([
-    SecureStore.getItemAsync(TOKEN_KEY),
+  const [token, refreshToken, rawUser] = await Promise.all([
+    SecureStore.getItemAsync(ACCESS_TOKEN_KEY),
+    SecureStore.getItemAsync(REFRESH_TOKEN_KEY),
     SecureStore.getItemAsync(USER_KEY),
   ])
-  return { token, user: rawUser ? JSON.parse(rawUser) : null }
+  return { token, refreshToken, user: parseUser(rawUser) }
 }
 
 export async function saveSession(data) {
   const user = { userId: data.userId, name: data.name, email: data.email, role: data.role }
   if (Platform.OS === 'web') {
-    browserStorage().setItem(TOKEN_KEY, data.token)
+    webAccessToken = data.token
     browserStorage().setItem(USER_KEY, JSON.stringify(user))
     return user
   }
-
-  await Promise.all([
-    SecureStore.setItemAsync(TOKEN_KEY, data.token),
+  const writes = [
+    SecureStore.setItemAsync(ACCESS_TOKEN_KEY, data.token),
     SecureStore.setItemAsync(USER_KEY, JSON.stringify(user)),
-  ])
+  ]
+  if (data.refreshToken) writes.push(SecureStore.setItemAsync(REFRESH_TOKEN_KEY, data.refreshToken))
+  await Promise.all(writes)
   return user
 }
 
 export async function clearSession() {
   if (Platform.OS === 'web') {
-    browserStorage().removeItem(TOKEN_KEY)
+    webAccessToken = null
     browserStorage().removeItem(USER_KEY)
     return
   }
-
   await Promise.all([
-    SecureStore.deleteItemAsync(TOKEN_KEY),
+    SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
+    SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
     SecureStore.deleteItemAsync(USER_KEY),
   ])
 }

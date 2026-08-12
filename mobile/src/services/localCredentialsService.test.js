@@ -35,7 +35,7 @@ describe('localCredentialsService', () => {
   })
 
   it('stores the biometric session protected by device authentication', async () => {
-    await enableBiometricLogin({ token: 'jwt', userId: 'id', name: 'User', email: 'user@example.com', role: 'USER' })
+    await enableBiometricLogin({ refreshToken: 'refresh-jwt', userId: 'id', name: 'User', email: 'user@example.com', role: 'USER' })
 
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
       'controle_horas_biometric_session',
@@ -43,13 +43,13 @@ describe('localCredentialsService', () => {
       expect.objectContaining({ requireAuthentication: true }),
     )
     await expect(readBiometricSession()).resolves.toEqual({
-      token: 'jwt',
+      refreshToken: 'refresh-jwt',
       user: { userId: 'id', name: 'User', email: 'user@example.com', role: 'USER' },
     })
   })
 
   it('removes the enabled preference and protected session', async () => {
-    await enableBiometricLogin({ token: 'jwt', userId: 'id', name: 'User', email: 'user@example.com', role: 'USER' })
+    await enableBiometricLogin({ refreshToken: 'refresh-jwt', userId: 'id', name: 'User', email: 'user@example.com', role: 'USER' })
     await clearBiometricLogin()
 
     expect(values.controle_horas_biometric_enabled).toBeUndefined()

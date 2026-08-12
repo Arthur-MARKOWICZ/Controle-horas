@@ -1,9 +1,19 @@
 {
   "cli": { "version": ">= 16.0.0" },
   "build": {
-    "development": { "developmentClient": true, "distribution": "internal" },
-    "preview": { "distribution": "internal" },
-    "production": { "autoIncrement": true }
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "http://137.131.254.106" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "http://137.131.254.106" }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "http://137.131.254.106" }
+    }
   },
   "submit": { "production": {} }
 }

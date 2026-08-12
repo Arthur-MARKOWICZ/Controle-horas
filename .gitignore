@@ -1,1 +1,10 @@
-.trae/*
+**/node_modules/
+**/dist/
+**/dist-web/
+**/.env
+**/.env.local
+**/coverage/
+backend/.migration-test/
+backup-*.dump
+backup-*.enc
+.trae/

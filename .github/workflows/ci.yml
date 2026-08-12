@@ -1,74 +1,116 @@
-name: Continuous Integration (CI)
+name: Continuous Integration
 
 on:
   push:
-    branches:
-      - main
-      - master
-      - develop
   pull_request:
-    branches:
-      - main
-      - master
-      - develop
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  backend-ci:
-    name: Backend CI (Java & Maven)
+  backend:
     runs-on: ubuntu-latest
-
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: controle_horas_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d controle_horas_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/controle_horas_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/controle_horas_test
+      JWT_ACCESS_SECRET: ci-access-secret-with-at-least-thirty-two-bytes
+      JWT_REFRESH_SECRET: ci-refresh-secret-with-at-least-thirty-two-bytes
+      NODE_ENV: test
+      COOKIE_SECURE: "false"
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-          cache-dependency-path: 'back-end/Controle_horas/pom.xml'
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: npm run lint
+        working-directory: backend
+      - run: npm run typecheck
+        working-directory: backend
+      - run: npm test
+        working-directory: backend
+      - run: npm run build
+        working-directory: backend
 
-      - name: Run Backend Tests
-        run: |
-          cd back-end/Controle_horas
-          mvn -B clean test
-
-  frontend-ci:
-    name: Frontend CI (Node & Vitest)
+  frontend:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
-
-      - name: Install dependencies
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run lint
+        working-directory: frontend
+      - run: npm run typecheck
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - name: Enforce initial JavaScript budget
+        shell: bash
         run: |
-          cd frontend
-          npm ci
+          asset=$(sed -n 's/.*src="\/\([^"?]*\.js\)".*/frontend\/dist\/\1/p' frontend/dist/index.html)
+          test -n "$asset"
+          bytes=$(gzip -c "$asset" | wc -c)
+          test "$bytes" -lt 102400
 
-      - name: Run Linter
-        run: |
-          cd frontend
-          npm run lint || echo "Lint warnings detected"
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+        working-directory: mobile
+      - run: npm test
+        working-directory: mobile
+      - run: npx expo export --platform web --output-dir dist-web
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_API_BASE_URL: http://localhost
 
-      - name: Run Frontend Tests
-        run: |
-          cd frontend
-          npm test
-
-      - name: Build Frontend
-        run: |
-          cd frontend
-          npm run build
+  images:
+    needs: [backend, frontend, mobile]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+          tags: controle-horas-backend:ci
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.frontend
+          push: false
+          tags: controle-horas-frontend:ci
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend

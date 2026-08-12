@@ -1,0 +1,74 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import * as historyService from '../services/historyService'
+import { getErrorMessage } from '../utils/errorMessage'
+import { getCurrentMonthRange } from '../utils/formatTime'
+import type { HistoryData } from '../types/api'
+
+interface DateRange { startDate: string; endDate: string }
+
+export function useHistory(initialRange: DateRange = getCurrentMonthRange()) {
+  const [history, setHistory] = useState<HistoryData | null>(null)
+  const [startDate, setStartDate] = useState(initialRange.startDate)
+  const [endDate, setEndDate] = useState(initialRange.endDate)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isExporting, setIsExporting] = useState(false)
+  const [error, setError] = useState('')
+  const [exportError, setExportError] = useState('')
+  const loadedRangeRef = useRef('')
+
+  const loadHistory = useCallback(async (nextStartDate: string, nextEndDate: string) => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const response = await historyService.getHistory(nextStartDate, nextEndDate)
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'Unable to load history')
+      }
+      setHistory(response.data)
+      setStartDate(nextStartDate)
+      setEndDate(nextEndDate)
+    } catch (requestError) {
+      setHistory(null)
+      setError(await getErrorMessage(requestError, 'Unable to load history'))
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const rangeKey = `${initialRange.startDate}:${initialRange.endDate}`
+    if (loadedRangeRef.current === rangeKey) return
+    loadedRangeRef.current = rangeKey
+    void loadHistory(initialRange.startDate, initialRange.endDate)
+  }, [initialRange.endDate, initialRange.startDate, loadHistory])
+
+  const exportHistory = useCallback(async (format: 'pdf' | 'xlsx') => {
+    setIsExporting(true)
+    setExportError('')
+    try {
+      const blob = format === 'pdf'
+        ? await historyService.exportPdf(startDate, endDate)
+        : await historyService.exportExcel(startDate, endDate)
+      const filename = format === 'pdf' ? 'historico-horas.pdf' : 'historico-horas.xlsx'
+      historyService.downloadHistoryFile(blob, filename)
+      return true
+    } catch (requestError) {
+      setExportError(await getErrorMessage(requestError, 'Unable to export history'))
+      return false
+    } finally {
+      setIsExporting(false)
+    }
+  }, [endDate, startDate])
+
+  return {
+    history,
+    startDate,
+    endDate,
+    isLoading,
+    isExporting,
+    error,
+    exportError,
+    loadHistory,
+    exportHistory,
+  }
+}

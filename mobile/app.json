@@ -12,7 +12,6 @@
     },
     "android": {
       "package": "com.controlehoras.app",
-      "usesCleartextTraffic": true,
       "splash": {
         "image": "./assets/android-splash.png",
         "resizeMode": "cover",
@@ -28,7 +27,15 @@
         }
       ],
       "expo-document-picker",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

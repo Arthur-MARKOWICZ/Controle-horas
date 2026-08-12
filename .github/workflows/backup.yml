@@ -1,0 +1,60 @@
+name: Daily PostgreSQL backup
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_KEY: ${{ secrets.OCI_VM_KEY }}
+          SSH_HOST: ${{ secrets.OCI_VM_HOST }}
+          SSH_USER: ${{ secrets.OCI_VM_USER }}
+          SSH_PORT: ${{ secrets.OCI_VM_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/oci_key
+          chmod 600 ~/.ssh/oci_key
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host controle-horas
+            HostName $SSH_HOST
+            User $SSH_USER
+            Port $SSH_PORT
+            IdentityFile ~/.ssh/oci_key
+            IdentitiesOnly yes
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Stream, verify and encrypt backup
+        shell: bash
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'controle_horas' }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+          test -n "$BACKUP_PASSPHRASE"
+          backup="backup-$(date -u +%Y%m%dT%H%M%SZ).dump"
+          ssh controle-horas "cd ~/controle-horas && docker compose -f docker-compose.prod.yml exec -T postgres pg_dump -U '$DB_USERNAME' -d '$POSTGRES_DB' -Fc" > "$backup"
+          pg_restore --list "$backup" > /dev/null
+          openssl enc -aes-256-cbc -salt -pbkdf2 -in "$backup" -out "${backup}.enc" -pass env:BACKUP_PASSPHRASE
+          rm -f "$backup"
+          echo "BACKUP_FILE=${backup}.enc" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: daily-backup-${{ github.run_id }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 14
+          if-no-files-found: error

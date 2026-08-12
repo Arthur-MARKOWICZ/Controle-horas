@@ -1,188 +1,36 @@
----
-description: Arquitetura geral do projeto e responsabilidades de cada camada.
-alwaysApply: true
----
+# Arquitetura
 
-# Architecture
+## Visão geral
 
-## Objetivo
+```text
+Web / Expo Web / Android / iOS
+                |
+          HTTP :80 (Nginx)
+           |            |
+      SPA estática   /api e health
+                         |
+              Fastify / Node.js 24
+                         |
+                   PostgreSQL 16
+```
 
-Este projeto deve seguir uma arquitetura em camadas (Layered Architecture), com separação clara entre Front-end e Back-end.
+Somente o Nginx publica porta na VM. O backend e o banco permanecem na rede privada do Compose. Os três processos permanentes são `nginx`, `backend` e `postgres`.
 
-A prioridade é:
-- Manutenibilidade
-- Legibilidade
-- Escalabilidade
-- Baixo acoplamento
-- Alta coesão
+## Backend
 
----
+- Módulos funcionais: autenticação, usuários, ponto/dashboard, histórico e arquivos.
+- Fluxo: rota/handler → serviço → repositório → SQL parametrizado.
+- Factories e construtores fazem a injeção explícita; não há ORM ou container de DI.
+- Regras de horário usam `America/Sao_Paulo`, inclusive partição de intervalos na meia-noite.
+- O pool tem no máximo cinco conexões por padrão.
+- Erros públicos mantêm `{ success, message, data }` com status HTTP semântico.
 
-# Estrutura do Repositório
+## Sessões
 
-/
-├── backend/
-├── frontend/
-├── docs/
-└── .cursor/
+O access JWT dura 15 minutos por padrão e contém `sub`, `jti` e `type=access`. O refresh JWT dura 30 dias, é rotacionado em cada uso e somente seu SHA-256 é persistido. Reutilização revoga a família.
 
-Cada diretório possui responsabilidade única.
+No web, o access token fica em memória e o refresh fica em cookie `HttpOnly`, `SameSite=Strict`, `Path=/api/auth`. No mobile, ambos ficam no `SecureStore`; biometria protege o refresh token e sempre solicita uma renovação.
 
-Nunca misturar arquivos do Front-end com o Back-end.
+## Migrations
 
----
-
-# Arquitetura Backend
-
-Client
-
-↓
-
-Controller
-
-↓
-
-Service
-
-↓
-
-Repository
-
-↓
-
-Database
-
-### Controller
-
-Responsável apenas por:
-
-- Receber requisições
-- Validar entrada
-- Chamar Services
-- Retornar respostas HTTP
-
-Nunca implementar regras de negócio.
-
----
-
-### Service
-
-Toda regra de negócio deve existir aqui.
-
-Exemplos:
-
-- cálculo da saída prevista
-- cálculo das horas trabalhadas
-- cálculo do banco de horas
-- validações
-
----
-
-### Repository
-
-Responsável exclusivamente pelo acesso ao banco.
-
-Nunca conter lógica de negócio.
-
----
-
-### Database
-
-Persistência utilizando PostgreSQL.
-
-Todas as alterações estruturais devem ser feitas através do Flyway.
-
----
-
-# Arquitetura Front-end
-
-Pages
-
-↓
-
-Components
-
-↓
-
-Services
-
-↓
-
-API
-
-A interface nunca deve implementar regras de negócio.
-
-Todos os cálculos oficiais devem ser realizados pela API.
-
----
-
-# Comunicação
-
-Frontend
-
-↓
-
-REST API
-
-↓
-
-Backend
-
-↓
-
-PostgreSQL
-
-Toda comunicação deve ocorrer via JSON.
-
----
-
-# Fluxo de Registro
-
-Usuário
-
-↓
-
-Registrar Entrada
-
-↓
-
-API
-
-↓
-
-Banco
-
-↓
-
-Dashboard Atualizado
-
-↓
-
-Saída Prevista Calculada
-
-O Front-end apenas exibe as informações.
-
----
-
-# Princípios
-
-Sempre seguir:
-
-- Separation of Concerns
-- Single Responsibility
-- Clean Architecture
-- SOLID
-
----
-
-# Futuras Evoluções
-
-A arquitetura deve permitir:
-
-- Aplicativo mobile
-- PWA
-- Dashboard administrativo
-- Múltiplos usuários
-- Integração com outros sistemas
-
-Sem necessidade de reescrever o núcleo da aplicação.
+O runner TypeScript aplica arquivos em ordem numérica sob lock consultivo e uma transação por migration. Bancos Flyway existentes têm apenas migrations bem-sucedidas adotadas. Schema existente sem metadados ou Flyway com falha aborta sem tentar inferir estado.

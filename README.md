@@ -1,160 +1,86 @@
 # Controle de Horas
 
-Aplicação para registrar jornadas de trabalho, acompanhar o banco de horas e visualizar a saída prevista. O projeto é um monorepo com interfaces web e mobile consumindo uma API REST.
+Monorepo para registro de jornada, pausas, almoço, histórico, banco de horas, importação/exportação e gestão multiempresa.
 
-## Funcionalidades
-
-- Cadastro, autenticação e encerramento de sessão com JWT.
-- Registro de entrada, pausa, almoço, retomada e saída.
-- Cálculo de horas trabalhadas, saldo diário, banco de horas e saída prevista.
-- Configuração de carga horária e dias de trabalho.
-- Histórico de jornadas com exportação em PDF e XLSX.
-- Importação de registros por CSV ou XLSX.
-- Gestão de usuários e perfis de acesso.
-
-## Tecnologias
+## Stack principal
 
 | Camada | Tecnologias |
 | --- | --- |
-| Backend | Java 21, Spring Boot, Spring Security, JWT, Spring Data JPA, Flyway e Maven |
-| Web | React, Vite, React Router, Axios e React Hook Form |
-| Mobile | React Native, Expo e React Navigation |
-| Banco de dados | PostgreSQL |
-| Infraestrutura local | Docker Compose |
+| API | Node.js 24 LTS, TypeScript strict, Fastify 5 e SQL explícito com `pg` |
+| Web | React 19, TypeScript, Vite, React Router e React Hook Form |
+| Mobile | React Native/Expo em JavaScript |
+| Dados | PostgreSQL 16 e migrations SQL V1–V12 |
+| Produção | Nginx Alpine, backend Node Alpine e PostgreSQL Alpine |
 
-## Arquitetura
+O backend segue `Route → Handler → Service → Repository → PostgreSQL`. Não há ORM, container de DI, Redis, PM2 ou servidor Node para o React. O diretório `back-end/Controle_horas` contém temporariamente a versão Spring usada para comparação e rollback; sua remoção depende do cutover validado.
 
-O backend segue a separação `Controller → Service → Repository → Database`. As regras de negócio — incluindo os cálculos de jornada e saldo — ficam na camada de serviços. As interfaces web e mobile apenas apresentam dados e consomem a API em JSON.
-
-```text
-Web / Mobile → REST API (Spring Boot) → PostgreSQL
-```
-
-## Estrutura do repositório
-
-```text
-back-end/Controle_horas/  API Spring Boot
-frontend/                Aplicação web React
-mobile/                  Aplicação React Native/Expo
-banco_de_dados/          Recursos auxiliares do PostgreSQL
-docs/                    Documentação técnica e de deploy
-docker-compose.local.yml Ambiente local integrado
-```
-
-## Executando localmente
-
-### Pré-requisitos
-
-- Docker Desktop, para a execução integrada; ou
-- Java 21, Maven, Node.js e PostgreSQL, para executar cada serviço separadamente.
-
-### Ambiente integrado com Docker
-
-O comando abaixo sobe PostgreSQL, backend e a versão web do aplicativo mobile. A API fica disponível em `http://localhost:8080` e a interface Expo web em `http://localhost:8081`.
+## Execução local com Docker
 
 ```powershell
 docker compose -f docker-compose.local.yml up --build
 ```
 
-Para iniciar a versão nativa para Android, execute:
+A aplicação web e a API ficam em `http://localhost:8080`. OpenAPI fica em `/swagger-ui.html` quando `OPENAPI_ENABLED=true`. Para incluir o Expo nativo:
 
 ```powershell
 docker compose -f docker-compose.local.yml --profile native up --build
 ```
 
-Para encerrar os containers:
+## Execução manual
 
 ```powershell
-docker compose -f docker-compose.local.yml down
-```
-
-> Use `down -v` somente quando quiser remover também os dados locais do PostgreSQL.
-
-### Backend manualmente
-
-1. Copie `back-end/Controle_horas/.env.example` para `back-end/Controle_horas/.env` e preencha os valores.
-2. Inicie a API:
-
-```powershell
-cd back-end/Controle_horas
-mvn spring-boot:run
-```
-
-As migrations do Flyway são executadas na inicialização. A documentação OpenAPI fica em `http://localhost:8080/swagger-ui.html`.
-
-### Frontend web manualmente
-
-1. Copie `frontend/.env.example` para `frontend/.env.local`.
-2. Instale as dependências e inicie o Vite:
-
-```powershell
-cd frontend
-npm install
+# API
+cd backend
+Copy-Item .env.example .env
+npm ci
+npm run migrate:dev
 npm run dev
-```
 
-O valor de `VITE_API_BASE_URL` deve apontar para a URL da API, normalmente `http://localhost:8080` no desenvolvimento local.
+# Web
+cd ..\frontend
+npm ci
+npm run dev
 
-### Aplicativo mobile manualmente
-
-1. Copie `mobile/.env.example` para `mobile/.env` e defina uma URL de API acessível pelo dispositivo.
-2. Instale as dependências e execute o Expo:
-
-```powershell
-cd mobile
-npm install
+# Mobile
+cd ..\mobile
+npm ci
 npm start
 ```
 
-Em um dispositivo físico, não use `localhost`: informe o IP acessível da máquina ou uma URL HTTPS pública.
-
-## Testes e validações
+## Validação
 
 ```powershell
-# Backend
-cd back-end/Controle_horas
-mvn test
-
-# Frontend web
-cd frontend
-npm test
+cd backend
 npm run lint
+npm run typecheck
+npm test
 npm run build
 
-# Mobile
-cd mobile
+cd ..\frontend
+npm run lint
+npm run typecheck
 npm test
+npm run build
+
+cd ..\mobile
+npm test
+npx expo export --platform web
 ```
 
-## Configuração e segurança
+Os testes PostgreSQL do backend são habilitados quando `TEST_DATABASE_URL` está definido. O CI usa PostgreSQL 16 real, executa V1–V12, os testes de integração e os builds das duas imagens.
 
-As configurações sensíveis são fornecidas por variáveis de ambiente. Nunca versione arquivos `.env` com credenciais. Para o backend, as principais variáveis são:
+## Configuração da API
 
-- `DB_URL`, `DB_USERNAME` e `DB_PASSWORD`
-- `JWT_SECRET` — use um valor aleatório com pelo menos 32 bytes
-- `JWT_EXPIRATION_MS`
-- `CORS_ALLOWED_ORIGINS`
-- `SERVER_PORT`
+Variáveis principais: `DATABASE_URL`, `DB_POOL_MAX`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TTL_SECONDS`, `JWT_REFRESH_TTL_SECONDS`, `BCRYPT_ROUNDS`, `COOKIE_SECURE`, `CORS_ALLOWED_ORIGINS`, `TIME_ZONE`, `PORT`, `NODE_ENV` e `OPENAPI_ENABLED`. Consulte [backend/.env.example](backend/.env.example).
 
-Consulte os arquivos `.env.example` de cada aplicação para os valores esperados.
+O ambiente solicitado usa somente HTTP e `COOKIE_SECURE=false`. Isso não protege credenciais ou tokens contra interceptação de transporte; `HttpOnly` e `SameSite=Strict` mitigam classes específicas de ataque, mas não substituem HTTPS.
 
-## Deploy atual
-
-Temporariamente, somente o backend Spring Boot e o PostgreSQL são publicados na VM Oracle. O frontend não faz parte do deploy e não é enviado ao Cloudflare. O código React continua no repositório para desenvolvimento local.
-
-```text
-Cliente da API → Oracle VM :8080 → Spring Boot → PostgreSQL
-```
-
-Não há Nginx nem container de frontend na VM. O backend continua publicado na porta `8080` para o aplicativo mobile e testes da API. Os limites de memória, pool de conexões e rotação de logs ficam em `docker-compose.prod.yml`.
-
-Os detalhes, secrets e procedimentos de publicação estão em [docs/deployment.md](docs/deployment.md).
-
-## Documentação adicional
+## Documentação
 
 - [Arquitetura](docs/architecture.mdc)
 - [Backend](docs/backend.mdc)
 - [Frontend](docs/frontend.mdc)
-- [Padrões de código](docs/coding-standards.mdc)
-- [Contexto e regras de negócio](docs/project-context.mdc)
-- [Deploy atual](docs/deployment.md)
+- [Padrões](docs/coding-standards.mdc)
+- [Deploy, backup e rollback](docs/deployment.md)
+- [Segurança da stack TypeScript](docs/security-typescript.md)
+- [Guia da reescrita](docs/REWRITE_TYPESCRIPT_GUIDE.md)

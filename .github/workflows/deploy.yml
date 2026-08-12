@@ -1,13 +1,9 @@
-name: Deploy backend to Oracle Cloud VM
+name: Deploy TypeScript stack
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - 'back-end/**'
-      - 'Dockerfile.backend'
-      - 'docker-compose.prod.yml'
-      - '.github/workflows/deploy.yml'
+  workflow_run:
+    workflows: ["Continuous Integration"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -15,288 +11,170 @@ permissions:
   packages: write
 
 env:
-  GHCR_REGISTRY: ghcr.io
+  REGISTRY: ghcr.io
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
-  build-and-push-backend:
-    name: Build and push backend image
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'master'))
     runs-on: ubuntu-latest
     outputs:
-      backend-image-name: ${{ steps.images.outputs.backend-name }}
-
+      backend: ${{ steps.names.outputs.backend }}
+      frontend: ${{ steps.names.outputs.frontend }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v4
         with:
-          registry: ${{ env.GHCR_REGISTRY }}
+          ref: ${{ env.DEPLOY_SHA }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Define image names
-        id: images
+      - id: names
+        shell: bash
         run: |
-          BACKEND_IMAGE_NAME="ghcr.io/${{ github.repository }}/backend"
-          echo "backend-name=$(echo "$BACKEND_IMAGE_NAME" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push backend image
-        uses: docker/build-push-action@v6
+          root=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "backend=${root}/backend:${DEPLOY_SHA}" >> "$GITHUB_OUTPUT"
+          echo "frontend=${root}/frontend:${DEPLOY_SHA}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile.backend
+          file: backend/Dockerfile
           push: true
-          tags: |
-            ${{ steps.images.outputs.backend-name }}:latest
-            ${{ steps.images.outputs.backend-name }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.names.outputs.backend }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.frontend
+          push: true
+          tags: ${{ steps.names.outputs.frontend }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
 
-  deploy-to-oracle-vm:
-    name: Deploy backend and database to Oracle Cloud VM
-    needs: build-and-push-backend
+  deploy:
+    needs: publish
     runs-on: ubuntu-latest
-
+    environment: production
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
       - name: Configure SSH
+        shell: bash
         env:
-          OCI_VM_HOST: ${{ secrets.OCI_VM_HOST }}
-          OCI_VM_USER: ${{ secrets.OCI_VM_USER }}
-          OCI_VM_PORT: ${{ secrets.OCI_VM_PORT || 22 }}
-          OCI_VM_KEY: ${{ secrets.OCI_VM_KEY }}
+          SSH_KEY: ${{ secrets.OCI_VM_KEY }}
+          SSH_HOST: ${{ secrets.OCI_VM_HOST }}
+          SSH_USER: ${{ secrets.OCI_VM_USER }}
+          SSH_PORT: ${{ secrets.OCI_VM_PORT || '22' }}
         run: |
-          set -Eeuo pipefail
-
-          report_ssh_error() {
-            local failed_line="$1"
-            local exit_code="$2"
-            echo "::error::SSH configuration failed at script line ${failed_line} with exit code ${exit_code}"
-          }
-
-          trap 'report_ssh_error "$LINENO" "$?"' ERR
-
-          for required_variable in OCI_VM_HOST OCI_VM_USER OCI_VM_PORT OCI_VM_KEY; do
-            if [ -z "${!required_variable:-}" ]; then
-              echo "::error::Required SSH variable ${required_variable} is empty"
-              exit 1
-            fi
-          done
-
-          echo "[$(date --iso-8601=seconds)] Configuring SSH for ${OCI_VM_USER}@${OCI_VM_HOST}:${OCI_VM_PORT}"
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$OCI_VM_KEY" | tr -d '\r' > ~/.ssh/oci_key
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/oci_key
           chmod 600 ~/.ssh/oci_key
-
-          echo "[$(date --iso-8601=seconds)] Validating private key format"
-          KEY_VALIDATION_ERROR="$(mktemp)"
-          if ! ssh-keygen -y -P '' -f ~/.ssh/oci_key > /dev/null 2> "$KEY_VALIDATION_ERROR"; then
-            echo "::error::OCI_VM_KEY is invalid, malformed, or protected by a passphrase"
-            sed 's/^/ssh-keygen: /' "$KEY_VALIDATION_ERROR"
-            rm -f "$KEY_VALIDATION_ERROR"
-            exit 1
-          fi
-          rm -f "$KEY_VALIDATION_ERROR"
-          ssh-keygen -lf ~/.ssh/oci_key
-
-          echo "[$(date --iso-8601=seconds)] Resolving SSH host"
-          getent ahosts "$OCI_VM_HOST" | head -n 5 || echo "::warning::Could not resolve ${OCI_VM_HOST} with getent"
-
-          echo "[$(date --iso-8601=seconds)] Creating SSH client configuration"
-          cat > ~/.ssh/config <<SSH_CONFIG
-          Host oracle-deploy
-            HostName ${OCI_VM_HOST}
-            User ${OCI_VM_USER}
-            Port ${OCI_VM_PORT}
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host controle-horas
+            HostName $SSH_HOST
+            User $SSH_USER
+            Port $SSH_PORT
             IdentityFile ~/.ssh/oci_key
             IdentitiesOnly yes
-            StrictHostKeyChecking accept-new
-            UserKnownHostsFile ~/.ssh/known_hosts
-            ConnectTimeout 90
-            ConnectionAttempts 3
-            ServerAliveInterval 15
-            ServerAliveCountMax 4
-            LogLevel VERBOSE
-          SSH_CONFIG
+          EOF
           chmod 600 ~/.ssh/config
-          touch ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
+          ssh controle-horas true
 
-          echo "[$(date --iso-8601=seconds)] Testing a real SSH connection"
-          if command -v nc > /dev/null 2>&1; then
-            nc -vz -w 15 "$OCI_VM_HOST" "$OCI_VM_PORT" \
-              || echo "::warning::Direct TCP test could not connect to ${OCI_VM_HOST}:${OCI_VM_PORT}; SSH will still perform the definitive test"
-          fi
-          ssh -v oracle-deploy "echo 'SSH connection established'; hostname; uptime"
-          echo "[$(date --iso-8601=seconds)] SSH configuration completed"
-
-      - name: Copy deployment configuration
-        run: |
-          set -Eeuo pipefail
-          echo "[$(date --iso-8601=seconds)] Creating remote deployment directory"
-          ssh oracle-deploy "mkdir -p ~/controle-horas"
-          echo "[$(date --iso-8601=seconds)] Uploading Docker Compose configuration"
-          scp docker-compose.prod.yml oracle-deploy:~/controle-horas/docker-compose.prod.yml
-
-      - name: Deploy application
-        timeout-minutes: 30
+      - name: Upload compose and environment
+        shell: bash
         env:
-          BACKEND_IMAGE: ${{ needs.build-and-push-backend.outputs.backend-image-name }}:${{ github.sha }}
+          BACKEND_IMAGE: ${{ needs.publish.outputs.backend }}
+          FRONTEND_IMAGE: ${{ needs.publish.outputs.frontend }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'controle_horas' }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          JWT_EXPIRATION_MS: ${{ secrets.JWT_EXPIRATION_MS || '3600000' }}
-          CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS || 'http://localhost:5173' }}
-          BACKEND_PORT: ${{ secrets.BACKEND_PORT || '8080' }}
-          HSTS_ENABLED: 'true'
-          GHCR_USERNAME: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OCI_VM_HOST: ${{ secrets.OCI_VM_HOST }}
-          OCI_VM_USER: ${{ secrets.OCI_VM_USER }}
-          OCI_VM_PORT: ${{ secrets.OCI_VM_PORT || 22 }}
+          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
         run: |
-          set -Eeuo pipefail
-          DEPLOY_ENV_FILE="$(mktemp)"
-
-          report_runner_error() {
-            local failed_line="$1"
-            local exit_code="$2"
-            echo "::error::Deployment runner failed at script line ${failed_line} with exit code ${exit_code}"
-          }
-
-          trap 'report_runner_error "$LINENO" "$?"' ERR
-          trap 'rm -f "$DEPLOY_ENV_FILE"' EXIT
+          set -euo pipefail
           umask 077
-
-          for required_variable in BACKEND_IMAGE DB_USERNAME DB_PASSWORD POSTGRES_DB JWT_SECRET OCI_VM_HOST OCI_VM_USER OCI_VM_PORT; do
-            if [ -z "${!required_variable:-}" ]; then
-              echo "::error::Required deployment variable ${required_variable} is empty"
-              exit 1
-            fi
+          env_file=$(mktemp)
+          trap 'rm -f "$env_file"' EXIT
+          for name in BACKEND_IMAGE FRONTEND_IMAGE DATABASE_URL DB_USERNAME DB_PASSWORD JWT_ACCESS_SECRET JWT_REFRESH_SECRET; do
+            test -n "${!name}"
           done
-
-          echo "[$(date --iso-8601=seconds)] Preparing deployment environment"
+          write_env() {
+            local key="$1" value="$2" escaped
+            escaped=${value//\\/\\\\}
+            escaped=${escaped//\'/\\\'}
+            printf "%s='%s'\n" "$key" "$escaped"
+          }
           {
-            printf 'BACKEND_IMAGE=%s\n' "$BACKEND_IMAGE"
-            printf 'DB_USERNAME=%s\n' "$DB_USERNAME"
-            printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
-            printf 'POSTGRES_DB=%s\n' "$POSTGRES_DB"
-            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
-            printf 'JWT_EXPIRATION_MS=%s\n' "$JWT_EXPIRATION_MS"
-            printf 'CORS_ALLOWED_ORIGINS=%s\n' "$CORS_ALLOWED_ORIGINS"
-            printf 'BACKEND_PORT=%s\n' "$BACKEND_PORT"
-            printf 'HSTS_ENABLED=%s\n' "$HSTS_ENABLED"
-          } > "$DEPLOY_ENV_FILE"
+            write_env BACKEND_IMAGE "$BACKEND_IMAGE"
+            write_env FRONTEND_IMAGE "$FRONTEND_IMAGE"
+            write_env DATABASE_URL "$DATABASE_URL"
+            write_env DB_USERNAME "$DB_USERNAME"
+            write_env DB_PASSWORD "$DB_PASSWORD"
+            write_env POSTGRES_DB "$POSTGRES_DB"
+            write_env JWT_ACCESS_SECRET "$JWT_ACCESS_SECRET"
+            write_env JWT_REFRESH_SECRET "$JWT_REFRESH_SECRET"
+            write_env COOKIE_SECURE false
+          } > "$env_file"
+          ssh controle-horas 'mkdir -p ~/controle-horas'
+          scp docker-compose.prod.yml controle-horas:~/controle-horas/
+          scp "$env_file" controle-horas:~/controle-horas/.env
 
-          echo "[$(date --iso-8601=seconds)] Uploading deployment environment"
-          scp "$DEPLOY_ENV_FILE" oracle-deploy:~/controle-horas/.env
+      - name: Start PostgreSQL and create verified backup
+        shell: bash
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'controle_horas' }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+          test -n "$BACKUP_PASSPHRASE"
+          printf '%s' "$GHCR_TOKEN" | ssh controle-horas "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
+          ssh controle-horas 'cd ~/controle-horas && chmod 600 .env && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d postgres'
+          for attempt in $(seq 1 30); do
+            ssh controle-horas 'cd ~/controle-horas && docker compose -f docker-compose.prod.yml exec -T postgres pg_isready' && break
+            test "$attempt" -lt 30
+            sleep 2
+          done
+          backup="backup-$(date -u +%Y%m%dT%H%M%SZ).dump"
+          ssh controle-horas "cd ~/controle-horas && docker compose -f docker-compose.prod.yml exec -T postgres pg_dump -U '$DB_USERNAME' -d '$POSTGRES_DB' -Fc" > "$backup"
+          pg_restore --list "$backup" > /dev/null
+          openssl enc -aes-256-cbc -salt -pbkdf2 -in "$backup" -out "${backup}.enc" -pass env:BACKUP_PASSPHRASE
+          rm -f "$backup"
+          echo "BACKUP_FILE=${backup}.enc" >> "$GITHUB_ENV"
 
-          echo "[$(date --iso-8601=seconds)] Authenticating VM in GHCR"
-          printf '%s' "$GHCR_TOKEN" | ssh oracle-deploy "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
+      - name: Store encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-deploy-backup-${{ github.run_id }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 14
+          if-no-files-found: error
 
-          echo "[$(date --iso-8601=seconds)] Starting remote deployment"
-          ssh oracle-deploy "bash -se" <<'REMOTE_SCRIPT'
-          set -Eeuo pipefail
-          COMPOSE_FILE="docker-compose.prod.yml"
-
-          log() {
-            printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*"
-          }
-
-          collect_diagnostics() {
-            local failed_line="$1"
-            local exit_code="$2"
-            trap - ERR
-            set +e
-
-            echo "::group::Deployment diagnostics"
-            log "Deployment failed at remote script line ${failed_line} with exit code ${exit_code}"
-            log "Host and system load"
-            hostname
-            uptime
-            free -h
-            df -h
-            df -i
-
-            log "Docker versions and storage"
-            docker --version
-            docker compose version
-            docker system df
-
-            log "Compose services and container states"
-            docker compose -f "$COMPOSE_FILE" config --services
-            docker compose -f "$COMPOSE_FILE" ps -a
-            docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
-            docker stats --no-stream
-
-            log "PostgreSQL and backend logs (last 200 lines)"
-            docker compose -f "$COMPOSE_FILE" logs --no-color --timestamps --tail=200 postgres backend
-            echo "::endgroup::"
-            exit "$exit_code"
-          }
-
-          trap 'collect_diagnostics "$LINENO" "$?"' ERR
-
-          cd ~/controle-horas
-          chmod 600 .env
-
-          log "Remote preflight"
-          log "Host: $(hostname); user: $(id -un); directory: $(pwd)"
-          docker --version
-          docker compose version
-          log "Deployment environment received with restricted permissions"
-          log "Memory before deploy"
-          free -h
-          log "Disk before deploy"
-          df -h
-          docker system df
-
-          log "Pulling backend and PostgreSQL images"
-          docker compose -f "$COMPOSE_FILE" pull
-
-          log "Starting containers and removing obsolete services"
-          docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
-          docker compose -f "$COMPOSE_FILE" ps -a
-
-          BACKEND_CONTAINER=$(docker compose -f "$COMPOSE_FILE" ps -q backend)
-          POSTGRES_CONTAINER=$(docker compose -f "$COMPOSE_FILE" ps -q postgres)
-          test -n "$BACKEND_CONTAINER"
-          test -n "$POSTGRES_CONTAINER"
-
-          log "Waiting for health checks"
-          for attempt in $(seq 1 36); do
-            BACKEND_STATE=$(docker inspect --format='{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$BACKEND_CONTAINER")
-            POSTGRES_STATE=$(docker inspect --format='{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$POSTGRES_CONTAINER")
-            log "Health attempt ${attempt}/36: backend=${BACKEND_STATE}, postgres=${POSTGRES_STATE}"
-
-            if [ "$BACKEND_STATE" = "running/healthy" ] && [ "$POSTGRES_STATE" = "running/healthy" ]; then
-              log "Deployment completed successfully"
-              docker compose -f "$COMPOSE_FILE" ps
-              docker image prune -a -f --filter "until=168h" || log "Image cleanup failed without affecting deployment"
-              exit 0
-            fi
-
-            if [[ "$BACKEND_STATE" == */unhealthy ]] || [[ "$POSTGRES_STATE" == */unhealthy ]] \
-              || [[ "$BACKEND_STATE" == exited/* ]] || [[ "$POSTGRES_STATE" == exited/* ]]; then
-              log "A required container stopped or became unhealthy"
-              collect_diagnostics "$LINENO" 1
-            fi
-
+      - name: Run migrations and deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh controle-horas 'cd ~/controle-horas && docker compose -f docker-compose.prod.yml run --rm backend npm run migrate'
+          ssh controle-horas 'cd ~/controle-horas && docker compose -f docker-compose.prod.yml up -d --remove-orphans'
+          for attempt in $(seq 1 24); do
+            if ssh controle-horas 'curl --fail --silent http://127.0.0.1/ready >/dev/null'; then exit 0; fi
+            test "$attempt" -lt 24
             sleep 5
           done
 
-          log "Health-check timeout after 180 seconds"
-          collect_diagnostics "$LINENO" 1
-          REMOTE_SCRIPT
-
-      - name: Clean up SSH credentials
-        if: always()
-        run: rm -f ~/.ssh/oci_key
+      - name: Diagnostics
+        if: failure()
+        run: ssh controle-horas 'cd ~/controle-horas && docker compose -f docker-compose.prod.yml ps -a && docker compose -f docker-compose.prod.yml logs --tail=200 postgres backend nginx'

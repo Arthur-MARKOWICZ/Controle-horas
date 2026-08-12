@@ -1,104 +1,59 @@
-# Deploy de produção
+# Deploy, backup e rollback
 
-## Arquitetura temporária
+## Produção
 
-O deploy de produção executa somente PostgreSQL e o backend Spring Boot na VM Oracle.
+O Compose mantém exatamente três containers permanentes:
 
-```text
-Aplicativo mobile / cliente da API
-               |
-               +-- HTTP :8080 --> Spring Boot --> PostgreSQL
-                                  Oracle VM       Docker privado
-```
+- `nginx`: 32 MiB, único serviço com porta publicada (`80`).
+- `backend`: 256 MiB, processo Node único e pool PostgreSQL máximo 5.
+- `postgres`: 256 MiB, PostgreSQL 16 com no máximo 20 conexões.
 
-O frontend React está temporariamente fora do deploy. Ele não é enviado ao Cloudflare e não existe container de frontend ou Nginx na VM.
+Os logs usam três arquivos rotacionados de 10 MB. Nginx serve a SPA, aplica fallback do React Router, gzip, cache imutável em assets com hash e `no-cache` em `index.html`.
 
-## Processo de deploy
+## Secrets do GitHub Actions
 
-O workflow `.github/workflows/deploy.yml`:
-
-1. cria somente a imagem Docker do backend;
-2. publica a imagem no GitHub Container Registry;
-3. copia `docker-compose.prod.yml` para a VM;
-4. atualiza os containers `postgres` e `backend` sem remover o volume do banco;
-5. aguarda os health checks;
-6. remove imagens Docker não utilizadas há mais de sete dias.
-
-O comando `docker compose up -d --remove-orphans` também remove o antigo container de frontend quando esta configuração é aplicada na VM.
-
-## GitHub Actions secrets
-
-| Secret | Valor |
+| Secret | Uso |
 | --- | --- |
-| `OCI_VM_HOST` | IP público ou DNS da VM Oracle. |
-| `OCI_VM_USER` | Usuário SSH da VM. |
-| `OCI_VM_PORT` | Porta SSH; normalmente `22`. |
-| `OCI_VM_KEY` | Chave privada SSH completa. |
-| `DB_USERNAME` | Usuário do PostgreSQL. |
-| `DB_PASSWORD` | Senha forte do PostgreSQL. |
-| `POSTGRES_DB` | Opcional; padrão `controle_horas`. |
-| `JWT_SECRET` | Segredo aleatório de pelo menos 32 bytes. |
-| `JWT_EXPIRATION_MS` | Opcional; padrão `3600000`. |
-| `CORS_ALLOWED_ORIGINS` | Opcional enquanto não há frontend publicado. |
-| `BACKEND_PORT` | Opcional; padrão `8080`. |
+| `OCI_VM_HOST`, `OCI_VM_USER`, `OCI_VM_PORT`, `OCI_VM_KEY` | Acesso SSH à VM. |
+| `DATABASE_URL` | URL PostgreSQL usada pelo backend, apontando para o host Compose `postgres`. |
+| `DB_USERNAME`, `DB_PASSWORD`, `POSTGRES_DB` | Inicialização e backup do PostgreSQL. |
+| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | Secrets diferentes, cada um com pelo menos 32 bytes. |
+| `BACKUP_PASSPHRASE` | Criptografia AES-256 dos dumps. |
 
-Na Oracle Cloud, mantenha a entrada TCP `8080` liberada apenas para os clientes que precisam acessar a API. A porta `80` não é necessária para esta aplicação.
+Exemplo de `DATABASE_URL`: `postgresql://usuario:senha-percent-encoded@postgres:5432/controle_horas`.
 
-## Otimizações de recursos
+## Pipeline de deploy
 
-O banco continua PostgreSQL para preservar os dados existentes, as migrations Flyway e o comportamento correto em acessos concorrentes. Trocar para SQLite exigiria uma migração de dados e reduziria a segurança operacional sem resolver necessariamente o maior consumo, que normalmente está no processo Java.
+1. CI executa lint, typecheck, testes, migrations PostgreSQL, builds web/backend/mobile e imagens.
+2. O deploy publica imagens imutáveis no GHCR.
+3. PostgreSQL é iniciado sem alterar o volume existente.
+4. `pg_dump -Fc` é transmitido por SSH ao runner.
+5. `pg_restore --list` valida o dump.
+6. O dump é criptografado com AES-256/PBKDF2 e guardado como artefato privado por 14 dias.
+7. O backend executa `npm run migrate` em container one-shot.
+8. O Compose atualiza os três serviços e aguarda `/ready` pelo Nginx.
 
-| Variável | Padrão | Finalidade |
-| --- | --- | --- |
-| `POSTGRES_MEMORY_LIMIT` | `256m` | Limite do container PostgreSQL. |
-| `POSTGRES_MAX_CONNECTIONS` | `30` | Limite de conexões do servidor. |
-| `POSTGRES_SHARED_BUFFERS` | `64MB` | Cache compartilhado do PostgreSQL. |
-| `POSTGRES_EFFECTIVE_CACHE_SIZE` | `192MB` | Estimativa de cache para o planejador. |
-| `POSTGRES_MAINTENANCE_WORK_MEM` | `32MB` | Memória para manutenção e migrations. |
-| `POSTGRES_WORK_MEM` | `2MB` | Memória por ordenação ou operação de hash. |
-| `BACKEND_MEMORY_LIMIT` | `512m` | Limite do container Spring Boot. |
-| `DB_MAX_POOL_SIZE` | `5` | Máximo de conexões Hikari. |
-| `DB_MIN_IDLE` | `1` | Conexão mínima ociosa. |
+Qualquer falha no backup interrompe o deploy. O workflow `backup.yml` repete o processo diariamente às 06:00 UTC.
 
-Os logs dos dois containers são rotacionados em três arquivos de até 10 MB. O Java usa Serial GC e respeita o limite do container.
-
-## Verificação
-
-Após o deploy:
+## Verificação manual
 
 ```bash
 cd ~/controle-horas
 docker compose -f docker-compose.prod.yml ps
-docker compose -f docker-compose.prod.yml logs --tail=100 postgres backend
-curl --fail http://localhost:8080/actuator/health
-free -h
-df -h
+docker compose -f docker-compose.prod.yml logs --tail=100 postgres backend nginx
+curl --fail http://127.0.0.1/health
+curl --fail http://127.0.0.1/ready
 docker stats --no-stream
 ```
 
-O workflow registra cada fase com data e hora. Quando uma etapa remota falha, o GitHub Actions exibe automaticamente um grupo `Deployment diagnostics` contendo:
+Não execute `docker compose down -v` em produção.
 
-- linha e código da falha;
-- carga, memória, disco e inodes da VM;
-- versões e uso de armazenamento do Docker;
-- estado e consumo dos containers;
-- as 200 linhas mais recentes dos logs do PostgreSQL e backend.
+## Cutover e rollback
 
-Os valores do `.env`, senhas, JWT e token do GHCR não são impressos. O arquivo de ambiente é criado com permissão restrita e enviado separadamente por SCP para evitar que caracteres especiais dos secrets sejam reinterpretados pelo shell remoto.
+V12 é aditiva; usuários, hashes BCrypt, UUIDs e registros permanecem compatíveis. Antes do primeiro cutover, execute o smoke test completo: cadastro, login, configuração, entrada, pausa/almoço, retomada, saída, histórico, banco, exportação, importação e gestão de usuários.
 
-Na etapa `Configure SSH`, o workflow valida se os secrets estão preenchidos, remove finais de linha incompatíveis da chave, verifica o formato da chave privada, resolve o host e testa uma conexão SSH real. A primeira conexão usa `StrictHostKeyChecking=accept-new`, registra a chave do servidor e rejeita alterações posteriores. O timeout é de 90 segundos e o log verboso diferencia falhas de rede, recusa de conexão e autenticação.
+Se readiness, smoke ou consumo falhar, restaure a imagem Spring anterior usando o mesmo volume PostgreSQL. Usuários precisarão se autenticar novamente. O código Spring/Maven só deve ser removido após estabilidade observada na VM e confirmação do rollback.
 
-Não execute `docker compose down -v` em produção. A opção `-v` remove o volume persistente do PostgreSQL.
+## Limitação HTTP
 
-## Frontend local
-
-O frontend continua disponível para desenvolvimento:
-
-```powershell
-cd frontend
-Copy-Item .env.example .env.local
-npm ci
-npm run dev
-```
-
-Não há workflow nem comando de deploy do frontend enquanto a hospedagem estiver desativada.
+Por decisão explícita, a publicação usa HTTP, `COOKIE_SECURE=false` e não envia HSTS. Senhas e tokens podem ser interceptados na rede. A operação segura para Internet pública requer HTTPS; `HttpOnly` e `SameSite=Strict` não fornecem confidencialidade de transporte.
