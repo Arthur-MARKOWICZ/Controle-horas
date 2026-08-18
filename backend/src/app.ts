@@ -36,6 +36,7 @@ interface RegisterBody extends LoginBody { name: string }
 interface RefreshBody { refreshToken: string }
 interface ManagerBody { managerId: string | null }
 interface HistoryQuery { startDate: string; endDate: string; limit?: string; offset?: string }
+interface AdministrativeWorkLogBody { entryAt: string; exitAt: string }
 
 const responseSchema = {
   type: 'object', required: ['success', 'message', 'data'],
@@ -250,6 +251,22 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
     integerQuery(request.query.limit, 90), integerQuery(request.query.offset, 0),
   )))
 
+  const requireAdminWorkLogAccess = async (request: FastifyRequest<{ Params: { userId: string } }>): Promise<User> => {
+    await authenticate(request)
+    if (actor(request).role !== 'ADMIN') throw new ForbiddenError('Only administrators can adjust work logs')
+    return users.requireAccess(actor(request), request.params.userId)
+  }
+  app.post<{ Params: { userId: string }; Body: AdministrativeWorkLogBody }>('/api/users/:userId/work-logs', {
+    preHandler: requireAdminWorkLogAccess, schema: { params: idParams(), body: administrativeWorkLogSchema() },
+  }, async (request) => ok('Work log created successfully', await workLogs.createAdministrative(
+    await users.requireAccess(actor(request), request.params.userId), new Date(request.body.entryAt), new Date(request.body.exitAt),
+  )))
+  app.put<{ Params: { userId: string; workLogId: string }; Body: AdministrativeWorkLogBody }>('/api/users/:userId/work-logs/:workLogId', {
+    preHandler: requireAdminWorkLogAccess, schema: { params: workLogParams(), body: administrativeWorkLogSchema() },
+  }, async (request) => ok('Work log updated successfully', await workLogs.updateAdministrative(
+    await users.requireAccess(actor(request), request.params.userId), request.params.workLogId, new Date(request.body.entryAt), new Date(request.body.exitAt),
+  )))
+
   const requireAdmin = async (request: FastifyRequest): Promise<void> => {
     await authenticate(request)
     if (actor(request).role !== 'ADMIN') throw new ForbiddenError('Only administrators can import work logs')
@@ -285,6 +302,19 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
 
 function idParams(): object {
   return { type: 'object', required: ['userId'], properties: { userId: { type: 'string', format: 'uuid' } } }
+}
+
+function workLogParams(): object {
+  return { type: 'object', required: ['userId', 'workLogId'], properties: {
+    userId: { type: 'string', format: 'uuid' }, workLogId: { type: 'string', format: 'uuid' },
+  } }
+}
+
+function administrativeWorkLogSchema(): object {
+  return {
+    type: 'object', additionalProperties: false, required: ['entryAt', 'exitAt'],
+    properties: { entryAt: { type: 'string', format: 'date-time' }, exitAt: { type: 'string', format: 'date-time' } },
+  }
 }
 
 function scheduleSchema(): object {

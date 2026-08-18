@@ -2,7 +2,7 @@ import type { Repositories } from '../../database/repositories.js'
 import type { DashboardResponse } from '../../domain/contracts.js'
 import { workLogResponse } from '../../domain/contracts.js'
 import type { CloseReason, User } from '../../domain/types.js'
-import { ConflictError, ValidationError } from '../../shared/errors.js'
+import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors.js'
 import { addDays, effectiveWorkload, localDateOf, localDateStart, pausedMinutes } from '../../shared/time.js'
 import type { WorkTimeService } from './work-time-service.js'
 
@@ -30,6 +30,18 @@ export class WorkLogService {
       }
     }
     return this.dashboard(user, now)
+  }
+
+  async createAdministrative(user: User, entryAt: Date, exitAt: Date) {
+    this.validateAdministrativeTimes(entryAt, exitAt)
+    return workLogResponse(await this.repositories.createClosedWorkLog(user.id, entryAt, exitAt))
+  }
+
+  async updateAdministrative(user: User, workLogId: string, entryAt: Date, exitAt: Date) {
+    this.validateAdministrativeTimes(entryAt, exitAt)
+    const log = await this.repositories.updateClosedWorkLog(user.id, workLogId, entryAt, exitAt)
+    if (!log) throw new NotFoundError('Work log not found')
+    return workLogResponse(log)
   }
 
   async dashboard(user: User, now = new Date()): Promise<DashboardResponse> {
@@ -62,5 +74,12 @@ export class WorkLogService {
       workedMinutesToday, pausedMinutesToday: pausedMinutes(logs), balanceMinutesToday, hourBankMinutes,
       workLogs: logs.map(workLogResponse), scheduleConfigured,
     }
+  }
+
+  private validateAdministrativeTimes(entryAt: Date, exitAt: Date): void {
+    if (Number.isNaN(entryAt.getTime()) || Number.isNaN(exitAt.getTime())) {
+      throw new ValidationError('Entry and exit must be valid ISO-8601 instants')
+    }
+    if (entryAt >= exitAt) throw new ValidationError('Exit time must be after entry time')
   }
 }

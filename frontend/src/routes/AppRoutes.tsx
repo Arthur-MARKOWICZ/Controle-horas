@@ -12,6 +12,7 @@ const HistoryPage = lazy(() => import('../pages/History/HistoryPage'))
 const UsersPage = lazy(() => import('../pages/Users/UsersPage'))
 const ImportPage = lazy(() => import('../pages/Import/ImportPage'))
 const ScheduleSettingsPage = lazy(() => import('../pages/ScheduleSettings/ScheduleSettingsPage'))
+const WorkLogAdjustmentsPage = lazy(() => import('../pages/WorkLogAdjustments/WorkLogAdjustmentsPage'))
 
 function GuestRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isSessionReady } = useAuth()
@@ -30,7 +31,10 @@ function AppRoutes() {
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/settings/schedule" element={<ScheduleSettingsPage />} />
     </Route>
-    <Route element={<RoleRoute allowedRoles={['ADMIN']} />}><Route path="/import" element={<ImportPage />} /></Route>
+    <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
+      <Route path="/import" element={<ImportPage />} />
+      <Route path="/settings/work-logs" element={<WorkLogAdjustmentsPage />} />
+    </Route>
     <Route element={<RoleRoute allowedRoles={['ADMIN', 'MANAGER']} />}>
       <Route path="/settings/users" element={<UsersPage />} />
       <Route path="/users" element={<Navigate to="/settings/users" replace />} />

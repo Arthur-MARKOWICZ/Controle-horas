@@ -166,6 +166,44 @@ integration('Fastify with PostgreSQL', () => {
     expect(imported.json().data).toMatchObject({ importedCount: 1, errorCount: 1 })
   })
 
+  it('allows an administrator to create and edit a forgotten work log, while enforcing its boundaries', async () => {
+    const admin = await mobileRegister('adjustments-admin@example.com')
+    const child = await app.inject({
+      method: 'POST', url: '/api/users', headers: auth(admin.token),
+      payload: { name: 'Adjustment Employee', email: 'adjustments-employee@example.com', password: 'Password123', role: 'USER' },
+    })
+    expect(child.statusCode).toBe(201)
+    const childId = child.json().data.id as string
+    const create = await app.inject({
+      method: 'POST', url: `/api/users/${childId}/work-logs`, headers: auth(admin.token),
+      payload: { entryAt: '2026-07-13T11:00:00.000Z', exitAt: '2026-07-13T20:00:00.000Z' },
+    })
+    expect(create.statusCode).toBe(200)
+    expect(create.json().data).toMatchObject({ closeReason: 'EXIT', entryAt: '2026-07-13T11:00:00.000Z' })
+    const workLogId = create.json().data.id as string
+
+    const overlap = await app.inject({
+      method: 'POST', url: `/api/users/${childId}/work-logs`, headers: auth(admin.token),
+      payload: { entryAt: '2026-07-13T19:00:00.000Z', exitAt: '2026-07-13T21:00:00.000Z' },
+    })
+    expect(overlap.statusCode).toBe(409)
+    const update = await app.inject({
+      method: 'PUT', url: `/api/users/${childId}/work-logs/${workLogId}`, headers: auth(admin.token),
+      payload: { entryAt: '2026-07-13T10:30:00.000Z', exitAt: '2026-07-13T19:30:00.000Z' },
+    })
+    expect(update.statusCode).toBe(200)
+    expect(update.json().data).toMatchObject({ entryAt: '2026-07-13T10:30:00.000Z', exitAt: '2026-07-13T19:30:00.000Z' })
+
+    const employee = await app.inject({
+      method: 'POST', url: '/api/auth/mobile/login', payload: { email: 'adjustments-employee@example.com', password: 'Password123' },
+    })
+    const forbidden = await app.inject({
+      method: 'POST', url: `/api/users/${childId}/work-logs`, headers: auth(employee.json().data.token as string),
+      payload: { entryAt: '2026-07-14T11:00:00.000Z', exitAt: '2026-07-14T20:00:00.000Z' },
+    })
+    expect(forbidden.statusCode).toBe(403)
+  })
+
   it('keeps web refresh tokens out of the JSON response', async () => {
     const response = await app.inject({
       method: 'POST', url: '/api/auth/register',

@@ -24,6 +24,7 @@ export interface HistoryData {
   startDate: string; endDate: string; totalWorkedMinutes: number; totalBalanceMinutes: number
   hourBankMinutes: number; days: HistoryDay[]; pagination?: { limit: number; offset: number; total: number }
 }
+export interface AdministrativeWorkLogPayload { entryAt: string; exitAt: string }
 export interface ManagedUser extends CurrentUser {
   managerId: string | null; managerName: string | null; createdById: string | null
   workStartDate: string | null; dailyWorkloadMinutes: number; standardEntryTime: string | null

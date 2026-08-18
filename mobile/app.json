@@ -3,6 +3,7 @@
     "name": "Controle de Horas",
     "slug": "controle-horas",
     "version": "1.0.0",
+    "icon": "./assets/app-icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "controlehoras",

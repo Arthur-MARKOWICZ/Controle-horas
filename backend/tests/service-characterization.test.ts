@@ -6,6 +6,7 @@ import { AccessTokenDenylist, AuthService, type JwtCodec } from '../src/modules/
 import { HistoryService } from '../src/modules/history/history-service.js'
 import { UserService } from '../src/modules/users/user-service.js'
 import { WorkTimeService } from '../src/modules/work-logs/work-time-service.js'
+import { WorkLogService } from '../src/modules/work-logs/work-log-service.js'
 
 const now = new Date('2026-07-14T15:00:00Z')
 function user(overrides: Partial<User> = {}): User {
@@ -69,6 +70,30 @@ describe('UserService characterization', () => {
     const isInCreatedSubtree = vi.fn().mockResolvedValue(false)
     await expect(new UserService(repositories({ isInCreatedSubtree }), 10).canAccess(user(), user({ id: 'foreign' }))).resolves.toBe(false)
   })
+  it('creates a managed user with a normalized email and schedule', async () => {
+    const created = user({ id: 'child', email: 'child@example.com', role: 'USER' })
+    const createUser = vi.fn().mockResolvedValue(created)
+    const service = new UserService(repositories({ emailExists: vi.fn().mockResolvedValue(false), createUser, findUserById: vi.fn().mockResolvedValue(user()) }), 4)
+    await expect(service.create(user(), {
+      name: ' Child ', email: 'CHILD@example.com', password: 'Password123', role: 'USER',
+      standardEntryTime: '08:00', standardExitTime: '17:00', lunchEnabled: true, lunchDurationMinutes: 60, workDays: ['MONDAY'],
+    })).resolves.toMatchObject({ id: 'child' })
+    expect(createUser).toHaveBeenCalledWith(expect.objectContaining({ email: 'child@example.com', dailyWorkloadMinutes: 480 }))
+  })
+  it('updates a user and prevents managers from changing roles', async () => {
+    const target = user({ id: 'child', role: 'USER', managerId: null })
+    const saveUser = vi.fn(async (value: User) => value)
+    const service = new UserService(repositories({ findUserById: vi.fn().mockResolvedValue(target), saveUser, isInCreatedSubtree: vi.fn().mockResolvedValue(true) }), 4)
+    await expect(service.update(user(), target.id, { name: 'Updated', standardEntryTime: '08:00', standardExitTime: '17:00', workDays: ['MONDAY'] }))
+      .resolves.toMatchObject({ name: 'Updated' })
+    await expect(service.update(user({ role: 'MANAGER' }), target.id, { name: 'Updated', role: 'ADMIN' })).rejects.toMatchObject({ statusCode: 403 })
+  })
+  it('allows administrators to assign an accessible manager', async () => {
+    const target = user({ id: 'child', role: 'USER' }); const manager = user({ id: 'manager', role: 'MANAGER' })
+    const saveUser = vi.fn(async (value: User) => value)
+    const service = new UserService(repositories({ findUserById: vi.fn().mockImplementation(async (id: string) => id === target.id ? target : manager), saveUser, isInCreatedSubtree: vi.fn().mockResolvedValue(true) }), 4)
+    await expect(service.assignManager(user(), target.id, manager.id)).resolves.toMatchObject({ managerId: manager.id })
+  })
 })
 
 describe('AuthService characterization', () => {
@@ -126,6 +151,38 @@ describe('AuthService characterization', () => {
     const token = codec.sign({ sub: user().id, jti: 'refresh-id', type: 'refresh', family: 'family' }, { expiresIn: 900 })
     await fixture.auth.logout(null, token)
     expect(revokeRefreshFamily).toHaveBeenCalledOnce()
+  })
+})
+
+describe('Administrative work-log characterization', () => {
+  const workTime = new WorkTimeService('America/Sao_Paulo')
+  it('creates a closed EXIT record for a forgotten day', async () => {
+    const createClosedWorkLog = vi.fn().mockResolvedValue({
+      id: 'log', userId: user().id, entryAt: new Date('2026-07-13T11:00:00Z'), exitAt: new Date('2026-07-13T20:00:00Z'),
+      closeReason: 'EXIT', createdAt: now, updatedAt: now,
+    })
+    const service = new WorkLogService(repositories({ createClosedWorkLog }), workTime, 'America/Sao_Paulo')
+    await expect(service.createAdministrative(user(), new Date('2026-07-13T11:00:00Z'), new Date('2026-07-13T20:00:00Z')))
+      .resolves.toMatchObject({ closeReason: 'EXIT' })
+    expect(createClosedWorkLog).toHaveBeenCalledWith(user().id, expect.any(Date), expect.any(Date))
+  })
+  it('rejects an administrative exit before its entry', async () => {
+    const service = new WorkLogService(repositories(), workTime, 'America/Sao_Paulo')
+    await expect(service.createAdministrative(user(), new Date('2026-07-13T20:00:00Z'), new Date('2026-07-13T11:00:00Z')))
+      .rejects.toMatchObject({ statusCode: 400 })
+  })
+  it('registers entry and exposes the updated dashboard', async () => {
+    const openWorkLog = vi.fn(); const dashboard = vi.fn().mockResolvedValue([])
+    const service = new WorkLogService(repositories({
+      openWorkLog, findWorkLogsOverlappingRange: dashboard, findFirstWorkLog: vi.fn().mockResolvedValue(null), findWorkLogsUntil: vi.fn().mockResolvedValue([]),
+    }), workTime, 'America/Sao_Paulo')
+    await service.register(user(), 'entry', now)
+    expect(openWorkLog).toHaveBeenCalledWith(user().id, now)
+  })
+  it('rejects closing an absent open entry and lunch when disabled', async () => {
+    const service = new WorkLogService(repositories({ closeOpenWorkLog: vi.fn().mockResolvedValue(false) }), workTime, 'America/Sao_Paulo')
+    await expect(service.register(user(), 'pause', now)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(service.register(user({ lunchEnabled: false }), 'lunch', now)).rejects.toMatchObject({ statusCode: 400 })
   })
 })
 

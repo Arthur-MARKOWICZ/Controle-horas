@@ -36,12 +36,20 @@ function MainLayout({ children }: { children: ReactNode }) {
             Histórico
           </NavLink>
           {isAdmin && (
-            <NavLink
-              to="/import"
-              className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
-            >
-              Importação
-            </NavLink>
+            <>
+              <NavLink
+                to="/settings/work-logs"
+                className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
+              >
+                Ajustes de ponto
+              </NavLink>
+              <NavLink
+                to="/import"
+                className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
+              >
+                Importação
+              </NavLink>
+            </>
           )}
           <NavLink
             to="/settings/schedule"
