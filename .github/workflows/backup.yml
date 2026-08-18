@@ -1,8 +1,8 @@
-name: Daily PostgreSQL backup
+name: Monthly PostgreSQL backup
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '0 6 1 * *'
   workflow_dispatch:
 
 permissions:
@@ -54,7 +54,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: daily-backup-${{ github.run_id }}
+          name: monthly-backup-${{ github.run_id }}
           path: ${{ env.BACKUP_FILE }}
           retention-days: 14
           if-no-files-found: error

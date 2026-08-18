@@ -33,7 +33,7 @@ Exemplo de `DATABASE_URL`: `postgresql://usuario:senha-percent-encoded@postgres:
 7. O backend executa `npm run migrate` em container one-shot.
 8. O Compose atualiza os três serviços e aguarda `/ready` pelo Nginx.
 
-Qualquer falha no backup interrompe o deploy. O workflow `backup.yml` repete o processo diariamente às 06:00 UTC.
+Qualquer falha no backup interrompe o deploy. O workflow `backup.yml` repete o processo mensalmente, no dia 1 às 06:00 UTC.
 
 ## Verificação manual
 
