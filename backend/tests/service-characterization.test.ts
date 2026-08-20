@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Repositories } from '../src/database/repositories.js'
 import type { User } from '../src/domain/types.js'
 import { AccessTokenDenylist, AuthService, type JwtCodec } from '../src/modules/auth/auth-service.js'
+import type { PasswordResetEmailSender } from '../src/modules/auth/email-sender.js'
 import { HistoryService } from '../src/modules/history/history-service.js'
 import { UserService } from '../src/modules/users/user-service.js'
 import { WorkTimeService } from '../src/modules/work-logs/work-time-service.js'
@@ -103,10 +104,10 @@ describe('AuthService characterization', () => {
     sign: (payload, options) => Buffer.from(JSON.stringify({ ...payload, exp: Math.floor(Date.now() / 1000) + options.expiresIn })).toString('base64url'),
     verify: (token) => JSON.parse(Buffer.from(token, 'base64url').toString('utf8')),
   }
-  function service(methods: Record<string, unknown> = {}, customCodec = codec) {
+  function service(methods: Record<string, unknown> = {}, customCodec = codec, emailSender: PasswordResetEmailSender | null = null) {
     const repo = repositories({ cleanupRefreshTokens: vi.fn(), createRefreshToken: vi.fn(), ...methods })
     const users = new UserService(repo, 10)
-    return { auth: new AuthService(repo, users, customCodec, customCodec, 900, 2_592_000, 10, new AccessTokenDenylist()), repo }
+    return { auth: new AuthService(repo, users, customCodec, customCodec, 900, 2_592_000, 10, new AccessTokenDenylist(), emailSender, 'https://app.example.com'), repo }
   }
   it('rejects an unknown email without disclosing which field failed', async () => {
     await expect(service({ findUserByEmail: vi.fn().mockResolvedValue(null) }).auth.login({ email: 'x@y.com', password: 'x' }, true))
@@ -151,6 +152,24 @@ describe('AuthService characterization', () => {
     const token = codec.sign({ sub: user().id, jti: 'refresh-id', type: 'refresh', family: 'family' }, { expiresIn: 900 })
     await fixture.auth.logout(null, token)
     expect(revokeRefreshFamily).toHaveBeenCalledOnce()
+  })
+  it('changes the password only after validating the current password and revokes all sessions', async () => {
+    const updatePassword = vi.fn(); const revokeAllRefreshTokens = vi.fn()
+    await service({ updatePassword, revokeAllRefreshTokens }).auth.changePassword(user({ passwordHash }), 'Password123', 'NewPassword123')
+    expect(updatePassword).toHaveBeenCalledWith(user().id, expect.any(String))
+    expect(revokeAllRefreshTokens).toHaveBeenCalledWith(user().id)
+  })
+  it('creates a hashed, expiring reset token and sends only its link by email', async () => {
+    const sendPasswordReset = vi.fn()
+    const fixture = service({ findUserByEmail: vi.fn().mockResolvedValue(user()), cleanupPasswordResetTokens: vi.fn(), createPasswordResetToken: vi.fn() }, codec, { sendPasswordReset })
+    await fixture.auth.requestPasswordReset('ROOT@example.com')
+    expect(fixture.repo.createPasswordResetToken).toHaveBeenCalledWith(expect.objectContaining({ tokenHash: expect.not.stringMatching(/^[A-Za-z0-9_-]{43}$/), expiresAt: expect.any(Date) }))
+    expect(sendPasswordReset).toHaveBeenCalledWith(expect.objectContaining({ recipient: 'root@example.com', resetUrl: expect.stringContaining('/reset-password?token=') }))
+  })
+  it('accepts a valid reset only once and revokes every refresh session', async () => {
+    const resetPasswordWithToken = vi.fn().mockResolvedValue(true)
+    await service({ resetPasswordWithToken }).auth.resetPassword('a'.repeat(43), 'NewPassword123')
+    expect(resetPasswordWithToken).toHaveBeenCalledWith(expect.any(String), expect.any(String))
   })
 })
 

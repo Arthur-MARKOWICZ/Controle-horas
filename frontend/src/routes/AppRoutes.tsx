@@ -13,6 +13,8 @@ const UsersPage = lazy(() => import('../pages/Users/UsersPage'))
 const ImportPage = lazy(() => import('../pages/Import/ImportPage'))
 const ScheduleSettingsPage = lazy(() => import('../pages/ScheduleSettings/ScheduleSettingsPage'))
 const WorkLogAdjustmentsPage = lazy(() => import('../pages/WorkLogAdjustments/WorkLogAdjustmentsPage'))
+const AccountPage = lazy(() => import('../pages/Account/AccountPage'))
+const ResetPasswordPage = lazy(() => import('../pages/ResetPassword/ResetPasswordPage'))
 
 function GuestRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isSessionReady } = useAuth()
@@ -25,11 +27,13 @@ function AppRoutes() {
     <Route element={<AuthLayout />}>
       <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
       <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
+      <Route path="/reset-password" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
     </Route>
     <Route element={<ProtectedRoute />}>
       <Route path="/" element={<DashboardPage />} />
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/settings/schedule" element={<ScheduleSettingsPage />} />
+      <Route path="/settings/account" element={<AccountPage />} />
     </Route>
     <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
       <Route path="/import" element={<ImportPage />} />

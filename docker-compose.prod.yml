@@ -44,6 +44,9 @@ services:
       PORT: 8080
       NODE_ENV: production
       OPENAPI_ENABLED: ${OPENAPI_ENABLED:-false}
+      SMTP_URL: ${SMTP_URL:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

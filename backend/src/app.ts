@@ -16,6 +16,7 @@ import type { User } from './domain/types.js'
 import { ok } from './domain/types.js'
 import { AppError, ForbiddenError, UnauthorizedError, ValidationError } from './shared/errors.js'
 import { AuthService, AccessTokenDenylist, type SessionResponse } from './modules/auth/auth-service.js'
+import { SmtpPasswordResetEmailSender } from './modules/auth/email-sender.js'
 import { UserService, type ManagedUserInput, type ScheduleInput } from './modules/users/user-service.js'
 import { WorkTimeService } from './modules/work-logs/work-time-service.js'
 import { WorkLogService } from './modules/work-logs/work-log-service.js'
@@ -37,6 +38,9 @@ interface RefreshBody { refreshToken: string }
 interface ManagerBody { managerId: string | null }
 interface HistoryQuery { startDate: string; endDate: string; limit?: string; offset?: string }
 interface AdministrativeWorkLogBody { entryAt: string; exitAt: string }
+interface ChangePasswordBody { currentPassword: string; newPassword: string }
+interface RequestPasswordResetBody { email: string }
+interface ResetPasswordBody { token: string; newPassword: string }
 
 const responseSchema = {
   type: 'object', required: ['success', 'message', 'data'],
@@ -67,6 +71,8 @@ const registerSchema = {
     },
   }, response: { 201: responseSchema },
 }
+
+const strongPassword = { type: 'string', minLength: 8, maxLength: 72, pattern: '^(?=.*[A-Za-z])(?=.*\\d).+$' }
 
 function bearer(request: FastifyRequest): string | null {
   const header = request.headers.authorization
@@ -118,6 +124,8 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   const auth = new AuthService(
     repositories, users, jwtNamespaces.access, jwtNamespaces.refresh,
     config.jwtAccessTtlSeconds, config.jwtRefreshTtlSeconds, config.bcryptRounds, new AccessTokenDenylist(),
+    config.smtpUrl && config.smtpFrom ? new SmtpPasswordResetEmailSender(config.smtpUrl, config.smtpFrom) : null,
+    config.publicAppUrl,
   )
   const workTime = new WorkTimeService(config.timeZone)
   const workLogs = new WorkLogService(repositories, workTime, config.timeZone)
@@ -184,6 +192,30 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   app.post('/api/auth/logout', async (request, reply) => {
     await auth.logout(bearer(request), request.cookies.refresh_token || null); clearRefreshCookie(reply)
     return ok('Logout successful', null)
+  })
+  app.post<{ Body: RequestPasswordResetBody }>('/api/auth/password-reset/request', {
+    schema: { body: { type: 'object', additionalProperties: false, required: ['email'], properties: { email: { type: 'string', format: 'email', maxLength: 255 } } } },
+    config: { rateLimit: authRateLimit },
+  }, async (request) => {
+    await auth.requestPasswordReset(request.body.email)
+    return ok('If this email is registered, a password reset link has been sent', null)
+  })
+  app.post<{ Body: ResetPasswordBody }>('/api/auth/password-reset/confirm', {
+    schema: { body: { type: 'object', additionalProperties: false, required: ['token', 'newPassword'], properties: { token: { type: 'string', minLength: 32, maxLength: 256 }, newPassword: strongPassword } } },
+    config: { rateLimit: authRateLimit },
+  }, async (request) => {
+    await auth.resetPassword(request.body.token, request.body.newPassword)
+    return ok('Password reset successfully', null)
+  })
+  app.post<{ Body: ChangePasswordBody }>('/api/auth/password', {
+    preHandler: authenticate,
+    schema: { body: { type: 'object', additionalProperties: false, required: ['currentPassword', 'newPassword'], properties: { currentPassword: { type: 'string', minLength: 1, maxLength: 72 }, newPassword: strongPassword } } },
+  }, async (request, reply) => {
+    await auth.changePassword(actor(request), request.body.currentPassword, request.body.newPassword)
+    const token = bearer(request)
+    if (token) await auth.logout(token, request.cookies.refresh_token || null)
+    clearRefreshCookie(reply)
+    return ok('Password changed successfully. Sign in again to continue', null)
   })
 
   app.post<{ Body: RegisterBody }>('/api/auth/mobile/register', {

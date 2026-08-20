@@ -89,6 +89,8 @@ function LoginPage() {
         </button>
       </form>
 
+      <p className={styles.footer}><Link to="/reset-password">Esqueceu a senha?</Link></p>
+
       <p className={styles.footer}>
         Não tem conta?
         {' '}

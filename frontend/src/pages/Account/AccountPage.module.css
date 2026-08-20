@@ -1,0 +1,10 @@
+.page { width: 100%; max-width: 38rem; }
+.header { margin-bottom: var(--space-lg); }
+.header h1, .card h2 { margin: 0 0 var(--space-sm); font-family: var(--font-display); }
+.header p { margin: 0; color: var(--color-text-muted); }
+.card { background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow-soft); border-radius: var(--radius-md); padding: var(--space-lg); }
+.form { display: grid; gap: var(--space-md); }
+.form label { display: grid; gap: var(--space-xs); font-weight: 600; }
+.form input { width: 100%; padding: .7rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); }
+.form button { border: 1px solid var(--color-primary); border-radius: var(--radius-sm); background: var(--color-primary); color: var(--color-on-primary); padding: .65rem 1rem; min-height: 2.75rem; cursor: pointer; font-weight: 600; }
+.error { color: var(--color-danger); margin: 0; }.success { color: var(--color-primary); margin: 0; }

@@ -1,9 +1,10 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import type { Repositories, RefreshTokenRecord } from '../../database/repositories.js'
 import type { User } from '../../domain/types.js'
-import { ConflictError, InvalidCredentialsError, UnauthorizedError } from '../../shared/errors.js'
+import { ConflictError, InvalidCredentialsError, UnauthorizedError, ValidationError } from '../../shared/errors.js'
 import type { UserService } from '../users/user-service.js'
+import type { PasswordResetEmailSender } from './email-sender.js'
 
 interface JwtClaims { sub: string; jti: string; type: 'access' | 'refresh'; family?: string; exp?: number }
 export interface JwtCodec { sign(payload: Record<string, unknown>, options: { expiresIn: number }): string; verify(token: string): JwtClaims }
@@ -32,6 +33,8 @@ export class AuthService {
     private readonly refreshTtl: number,
     private readonly bcryptRounds: number,
     readonly denylist: AccessTokenDenylist,
+    private readonly emailSender: PasswordResetEmailSender | null = null,
+    private readonly publicAppUrl: string | null = null,
   ) {}
 
   async register(input: { name: string; email: string; password: string }, includeRefresh: boolean): Promise<SessionResponse> {
@@ -83,6 +86,29 @@ export class AuthService {
     try { claims = this.accessJwt.verify(token) } catch { throw new UnauthorizedError('Access token is invalid or expired') }
     if (claims.type !== 'access' || this.denylist.has(claims.jti)) throw new UnauthorizedError('Access token is invalid or expired')
     return claims
+  }
+
+  async changePassword(user: User, currentPassword: string, newPassword: string): Promise<void> {
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) throw new InvalidCredentialsError()
+    await this.repositories.updatePassword(user.id, await bcrypt.hash(newPassword, this.bcryptRounds))
+    await this.repositories.revokeAllRefreshTokens(user.id)
+  }
+
+  async requestPasswordReset(emailInput: string): Promise<void> {
+    if (!this.emailSender || !this.publicAppUrl) throw new ValidationError('Password reset email is not configured')
+    const user = await this.repositories.findUserByEmail(emailInput.trim().toLowerCase())
+    if (!user) return
+    const token = randomBytes(32).toString('base64url')
+    await this.repositories.cleanupPasswordResetTokens()
+    await this.repositories.createPasswordResetToken({
+      id: randomUUID(), userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 30 * 60 * 1_000),
+    })
+    await this.emailSender.sendPasswordReset({ recipient: user.email, resetUrl: `${this.publicAppUrl}/reset-password?token=${encodeURIComponent(token)}` })
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const reset = await this.repositories.resetPasswordWithToken(hashToken(token), await bcrypt.hash(newPassword, this.bcryptRounds))
+    if (!reset) throw new ValidationError('Password reset link is invalid or expired')
   }
 
   private async createSession(user: User, includeRefresh: boolean): Promise<SessionResponse> {

@@ -57,6 +57,12 @@ function MainLayout({ children }: { children: ReactNode }) {
           >
             Jornada
           </NavLink>
+          <NavLink
+            to="/settings/account"
+            className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
+          >
+            Minha conta
+          </NavLink>
           {canManageUsers && (
             <NavLink
               to="/settings/users"

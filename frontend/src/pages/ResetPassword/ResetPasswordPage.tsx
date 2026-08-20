@@ -1,0 +1,20 @@
+import { useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { requestPasswordReset, resetPassword } from '../../services/authService'
+import { getErrorMessage } from '../../utils/errorMessage'
+import styles from '../authForms.module.css'
+
+interface RequestForm { email: string }
+interface ResetForm { newPassword: string; confirmation: string }
+
+function ResetPasswordPage() {
+  const [params] = useSearchParams(); const token = params.get('token')
+  const [message, setMessage] = useState(''); const [submitError, setSubmitError] = useState('')
+  const request = useForm<RequestForm>(); const reset = useForm<ResetForm>(); const newPassword = reset.watch('newPassword')
+  const submitRequest = async ({ email }: RequestForm) => { setMessage(''); setSubmitError(''); try { const response = await requestPasswordReset(email); setMessage(response.message) } catch (error) { setSubmitError(await getErrorMessage(error, 'Não foi possível solicitar a redefinição.')) } }
+  const submitReset = async ({ newPassword: password }: ResetForm) => { setMessage(''); setSubmitError(''); try { const response = await resetPassword(token || '', password); setMessage(`${response.message} Agora você já pode entrar.`) } catch (error) { setSubmitError(await getErrorMessage(error, 'Não foi possível redefinir a senha.')) } }
+  if (!token) return <><h1 className={styles.title}>Esqueceu a senha?</h1><p className={styles.hint}>Informe seu e-mail e enviaremos um link para redefinir sua senha.</p><form className={styles.form} onSubmit={request.handleSubmit(submitRequest)} noValidate><div className={styles.field}><label className={styles.label} htmlFor="resetEmail">E-mail</label><input id="resetEmail" type="email" autoComplete="email" className={styles.input} {...request.register('email', { required: 'Informe seu e-mail.', pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Informe um e-mail válido.' } })} />{request.formState.errors.email && <p className={styles.errorText}>{request.formState.errors.email.message}</p>}</div>{submitError && <p className={styles.alert} role="alert">{submitError}</p>}{message && <p role="status">{message}</p>}<button className={styles.submit} disabled={request.formState.isSubmitting} type="submit">{request.formState.isSubmitting ? 'Enviando...' : 'Enviar link'}</button></form><p className={styles.footer}><Link to="/login">Voltar para entrar</Link></p></>
+  return <><h1 className={styles.title}>Definir nova senha</h1><form className={styles.form} onSubmit={reset.handleSubmit(submitReset)} noValidate><div className={styles.field}><label className={styles.label} htmlFor="resetNewPassword">Nova senha</label><input id="resetNewPassword" type="password" autoComplete="new-password" className={styles.input} {...reset.register('newPassword', { required: 'Informe a nova senha.', minLength: { value: 8, message: 'Use ao menos 8 caracteres.' }, pattern: { value: /^(?=.*[A-Za-z])(?=.*\d).+$/, message: 'Use pelo menos uma letra e um número.' } })} />{reset.formState.errors.newPassword && <p className={styles.errorText}>{reset.formState.errors.newPassword.message}</p>}</div><div className={styles.field}><label className={styles.label} htmlFor="resetConfirmation">Confirmar nova senha</label><input id="resetConfirmation" type="password" autoComplete="new-password" className={styles.input} {...reset.register('confirmation', { required: 'Confirme a nova senha.', validate: (value) => value === newPassword || 'As senhas não coincidem.' } )} />{reset.formState.errors.confirmation && <p className={styles.errorText}>{reset.formState.errors.confirmation.message}</p>}</div>{submitError && <p className={styles.alert} role="alert">{submitError}</p>}{message && <p role="status">{message}</p>}<button className={styles.submit} disabled={reset.formState.isSubmitting} type="submit">{reset.formState.isSubmitting ? 'Redefinindo...' : 'Redefinir senha'}</button></form><p className={styles.footer}><Link to="/login">Voltar para entrar</Link></p></>
+}
+export default ResetPasswordPage

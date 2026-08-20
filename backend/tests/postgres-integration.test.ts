@@ -17,6 +17,7 @@ const config: AppConfig = {
   jwtAccessTtlSeconds: 900, jwtRefreshTtlSeconds: 2_592_000, bcryptRounds: 10,
   cookieSecure: false, corsAllowedOrigins: [], timeZone: 'America/Sao_Paulo', port: 8080,
   nodeEnv: 'test', openApiEnabled: true, logLevel: 'silent',
+  smtpUrl: null, smtpFrom: null, publicAppUrl: null,
 }
 
 function auth(token: string) { return { authorization: `Bearer ${token}` } }
@@ -49,9 +50,9 @@ integration('Fastify with PostgreSQL', () => {
     if (pool) await pool.end()
   })
 
-  it('runs a new database and safely adopts successful Flyway V1-V11 before V12', async () => {
+  it('runs a new database and safely adopts successful Flyway V1-V11 before V13', async () => {
     const versions = await pool.query<{ version: number }>('SELECT version FROM app_schema_migrations ORDER BY version')
-    expect(versions.rows.map((row) => row.version)).toEqual([1,2,3,4,5,6,7,8,9,10,11,12])
+    expect(versions.rows.map((row) => row.version)).toEqual([1,2,3,4,5,6,7,8,9,10,11,12,13])
     expect((await app.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(200)
 
     const adoptedDatabase = 'controle_horas_adopt_test'
@@ -81,7 +82,7 @@ integration('Fastify with PostgreSQL', () => {
         'SELECT version,source FROM app_schema_migrations ORDER BY version',
       )
       expect(adopted.rows.filter((row) => row.version <= 11).every((row) => row.source === 'flyway')).toBe(true)
-      expect(adopted.rows.at(-1)).toEqual({ version: 12, source: 'typescript' })
+      expect(adopted.rows.at(-1)).toEqual({ version: 13, source: 'typescript' })
     } finally {
       process.env.DATABASE_URL = databaseUrl
       if (adoptedPool) await adoptedPool.end()

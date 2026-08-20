@@ -13,6 +13,9 @@ export interface AppConfig {
   nodeEnv: 'development' | 'test' | 'production'
   openApiEnabled: boolean
   logLevel: string
+  smtpUrl: string | null
+  smtpFrom: string | null
+  publicAppUrl: string | null
 }
 
 function required(environment: NodeJS.ProcessEnv, name: string): string {
@@ -75,5 +78,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     nodeEnv: nodeEnv as AppConfig['nodeEnv'],
     openApiEnabled: boolean(environment, 'OPENAPI_ENABLED', nodeEnv !== 'production'),
     logLevel: environment.LOG_LEVEL?.trim() || (nodeEnv === 'production' ? 'warn' : 'info'),
+    smtpUrl: environment.SMTP_URL?.trim() || null,
+    smtpFrom: environment.SMTP_FROM?.trim() || null,
+    publicAppUrl: environment.PUBLIC_APP_URL?.trim().replace(/\/$/, '') || null,
   }
 }
