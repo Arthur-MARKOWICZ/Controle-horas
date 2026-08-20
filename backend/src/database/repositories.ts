@@ -105,15 +105,20 @@ export class Repositories {
   }
 
   async saveUser(user: User): Promise<User> {
-    await this.pool.query(
-      `UPDATE users SET name=$2, role=$3, manager_id=$4, work_start_date=$5,
-         daily_workload_minutes=$6, standard_entry_time=$7, standard_exit_time=$8,
-         lunch_enabled=$9, lunch_duration_minutes=$10, work_days=$11, updated_at=NOW()
+    try {
+      await this.pool.query(
+        `UPDATE users SET name=$2, email=$3, role=$4, manager_id=$5, work_start_date=$6,
+         daily_workload_minutes=$7, standard_entry_time=$8, standard_exit_time=$9,
+         lunch_enabled=$10, lunch_duration_minutes=$11, work_days=$12, updated_at=NOW()
        WHERE id=$1`,
-      [user.id, user.name, user.role, user.managerId, user.workStartDate, user.dailyWorkloadMinutes,
+        [user.id, user.name, user.email, user.role, user.managerId, user.workStartDate, user.dailyWorkloadMinutes,
         user.standardEntryTime, user.standardExitTime, user.lunchEnabled, user.lunchDurationMinutes,
         user.workDays.join(',') || null],
-    )
+      )
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') throw new ConflictError('Email is already registered')
+      throw error
+    }
     return (await this.findUserById(user.id))!
   }
 

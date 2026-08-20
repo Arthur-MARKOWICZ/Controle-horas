@@ -132,6 +132,12 @@ export class UserService {
   async update(actor: User, targetId: string, input: ManagedUserInput): Promise<object> {
     this.requireManager(actor)
     let target = await this.requireAccess(actor, targetId)
+    let email = target.email
+    if (input.email !== undefined) {
+      if (actor.role !== 'ADMIN') throw new ForbiddenError('Only administrators can change user email addresses')
+      email = input.email.trim().toLowerCase()
+      if (email !== target.email && await this.repositories.emailExists(email)) throw new ConflictError('Email is already registered')
+    }
     const role = roleOf(input.role, target.role)
     if (role !== target.role && actor.role !== 'ADMIN') throw new ForbiddenError('Only administrators can change user roles')
     let managerId = target.managerId
@@ -142,7 +148,7 @@ export class UserService {
       const manager = await this.requireAccess(actor, managerId)
       if (manager.role !== 'ADMIN' && manager.role !== 'MANAGER') throw new ValidationError('Assigned manager must have MANAGER or ADMIN role')
     }
-    target = this.schedule({ ...target, name: input.name.trim(), role, managerId }, input)
+    target = this.schedule({ ...target, name: input.name.trim(), email, role, managerId }, input)
     return this.response(await this.repositories.saveUser(target))
   }
 

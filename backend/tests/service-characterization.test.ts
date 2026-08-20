@@ -89,6 +89,14 @@ describe('UserService characterization', () => {
       .resolves.toMatchObject({ name: 'Updated' })
     await expect(service.update(user({ role: 'MANAGER' }), target.id, { name: 'Updated', role: 'ADMIN' })).rejects.toMatchObject({ statusCode: 403 })
   })
+  it('allows only administrators to change a user email address', async () => {
+    const target = user({ id: 'child', role: 'USER' })
+    const saveUser = vi.fn(async (value: User) => value)
+    const admin = new UserService(repositories({ findUserById: vi.fn().mockResolvedValue(target), saveUser, isInCreatedSubtree: vi.fn().mockResolvedValue(true), emailExists: vi.fn().mockResolvedValue(false) }), 10)
+    await expect(admin.update(user(), target.id, { name: 'Child', email: 'NEW@example.com' })).resolves.toMatchObject({ email: 'new@example.com' })
+    const manager = new UserService(repositories({ findUserById: vi.fn().mockResolvedValue(target) }), 10)
+    await expect(manager.update(user({ role: 'MANAGER' }), target.id, { name: 'Child', email: 'new@example.com' })).rejects.toMatchObject({ statusCode: 403 })
+  })
   it('allows administrators to assign an accessible manager', async () => {
     const target = user({ id: 'child', role: 'USER' }); const manager = user({ id: 'manager', role: 'MANAGER' })
     const saveUser = vi.fn(async (value: User) => value)

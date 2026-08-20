@@ -22,7 +22,7 @@ interface UserFormValues {
   workStartDate: string
 }
 
-type EditUserFormValues = Omit<UserFormValues, 'email' | 'password'>
+type EditUserFormValues = Omit<UserFormValues, 'password'>
 
 const ROLE_LABELS = {
   ADMIN: 'Admin',
@@ -92,6 +92,7 @@ function UsersPage() {
     }
     resetEdit({
       name: user.name,
+      email: user.email,
       role: user.role,
       managerId: user.managerId || '',
       workStartDate: user.workStartDate || '',
@@ -174,6 +175,7 @@ function UsersPage() {
     const editingUser = users.find((item) => item.id === editingUserId)
     const success = await updateUser(editingUserId, {
       name: values.name,
+      email: isAdmin ? values.email : undefined,
       role: isAdmin ? values.role : undefined,
       managerId: isAdmin && values.managerId ? values.managerId : undefined,
       workStartDate: values.workStartDate || null,
@@ -503,6 +505,21 @@ function UsersPage() {
                 />
               </label>
               {isAdmin && (
+                <label htmlFor="editEmail">
+                  E-mail
+                  <input
+                    id="editEmail"
+                    type="email"
+                    autoComplete="email"
+                    disabled={isSubmitting}
+                    {...registerEdit('email', {
+                      required: 'Informe o e-mail.',
+                      pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Informe um e-mail válido.' },
+                    })}
+                  />
+                </label>
+              )}
+              {isAdmin && (
                 <label htmlFor="editRole">
                   Papel
                   <select id="editRole" disabled={isSubmitting} {...registerEdit('role')}>
@@ -570,9 +587,9 @@ function UsersPage() {
                 </button>
               </div>
             </form>
-            {(errorsEdit.name || editWorkDaysError) && (
+            {(errorsEdit.name || errorsEdit.email || editWorkDaysError) && (
               <p className={styles.fieldError}>
-                {errorsEdit.name?.message || editWorkDaysError}
+                {errorsEdit.name?.message || errorsEdit.email?.message || editWorkDaysError}
               </p>
             )}
           </section>
