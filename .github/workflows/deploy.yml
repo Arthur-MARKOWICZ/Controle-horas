@@ -100,12 +100,15 @@ jobs:
           POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'controle_horas' }}
           JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          SMTP_URL: ${{ secrets.SMTP_URL }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          PUBLIC_APP_URL: ${{ secrets.PUBLIC_APP_URL }}
         run: |
           set -euo pipefail
           umask 077
           env_file=$(mktemp)
           trap 'rm -f "$env_file"' EXIT
-          for name in BACKEND_IMAGE FRONTEND_IMAGE DATABASE_URL DB_USERNAME DB_PASSWORD POSTGRES_DB JWT_ACCESS_SECRET JWT_REFRESH_SECRET; do
+          for name in BACKEND_IMAGE FRONTEND_IMAGE DATABASE_URL DB_USERNAME DB_PASSWORD POSTGRES_DB JWT_ACCESS_SECRET JWT_REFRESH_SECRET SMTP_URL SMTP_FROM PUBLIC_APP_URL; do
             value=${!name}
             if test -z "$value"; then
               printf "Required production value is missing: %s\n" "$name" >&2
@@ -154,6 +157,9 @@ jobs:
             write_env POSTGRES_DB "$POSTGRES_DB"
             write_env JWT_ACCESS_SECRET "$JWT_ACCESS_SECRET"
             write_env JWT_REFRESH_SECRET "$JWT_REFRESH_SECRET"
+            write_env SMTP_URL "$SMTP_URL"
+            write_env SMTP_FROM "$SMTP_FROM"
+            write_env PUBLIC_APP_URL "$PUBLIC_APP_URL"
             write_env COOKIE_SECURE false
           } > "$env_file"
           ssh controle-horas 'mkdir -p ~/controle-horas'
