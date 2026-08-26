@@ -158,7 +158,11 @@ export class FileService {
     const ExcelJS = (await import('exceljs')).default
     const workbook = new ExcelJS.Workbook()
     const compatibleBuffer = content as unknown as Parameters<typeof workbook.xlsx.load>[0]
-    await workbook.xlsx.load(compatibleBuffer)
+    try {
+      await workbook.xlsx.load(compatibleBuffer)
+    } catch {
+      throw new ValidationError('Unable to read the XLSX file. Check that it is not corrupted or password-protected, then try again.')
+    }
     const sheet = workbook.worksheets[0]
     if (!sheet) throw new ValidationError('XLSX file is empty')
     this.validateHeader([sheet.getCell(1, 1).text, sheet.getCell(1, 2).text, sheet.getCell(1, 3).text, sheet.getCell(1, 4).text])

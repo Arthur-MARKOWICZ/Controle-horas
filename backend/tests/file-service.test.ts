@@ -46,6 +46,13 @@ describe('FileService', () => {
     await expect(service().files.importFile(user, filename, Buffer.from(content))).rejects.toMatchObject({ message: expect.stringContaining(message) })
   })
 
+  it('returns a clear validation message when an XLSX cannot be read', async () => {
+    await expect(service().files.importFile(user, 'corrupted.xlsx', Buffer.from('PK'))).rejects.toMatchObject({
+      message: 'Unable to read the XLSX file. Check that it is not corrupted or password-protected, then try again.',
+      statusCode: 400,
+    })
+  })
+
   it('exports history as Excel and PDF', async () => {
     const { files, history } = service()
     const excel = await files.exportExcel(user, '2026-07-13', '2026-07-13')
