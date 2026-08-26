@@ -2,10 +2,11 @@
 
 Antes de gerar código, consulte:
 
-- docs/architecture.mdc
-- docs/backend.mdc
-- docs/frontend.mdc
-- docs/coding-standards.mdc
+- ai-docs/architecture.mdc
+- ai-docs/backend.mdc
+- ai-docs/frontend.mdc
+- ai-docs/coding-standards.mdc
+- ai-docs/AI_STUDY_GUARDRAILS.md
 
 Regras gerais:
 

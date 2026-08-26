@@ -23,7 +23,7 @@ A prioridade é:
 /
 ├── backend/
 ├── frontend/
-├── docs/
+├── ai-docs/
 └── .cursor/
 
 Cada diretório possui responsabilidade única.

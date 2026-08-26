@@ -83,10 +83,10 @@ O ambiente solicitado usa somente HTTP e `COOKIE_SECURE=false`. Isso não proteg
 
 ## Documentação
 
-- [Arquitetura](docs/architecture.mdc)
-- [Backend](docs/backend.mdc)
-- [Frontend](docs/frontend.mdc)
-- [Padrões](docs/coding-standards.mdc)
-- [Deploy, backup e rollback](docs/deployment.md)
-- [Segurança da stack TypeScript](docs/security-typescript.md)
-- [Guia da reescrita](docs/REWRITE_TYPESCRIPT_GUIDE.md)
+- [Arquitetura](ai-docs/architecture.mdc)
+- [Backend](ai-docs/backend.mdc)
+- [Frontend](ai-docs/frontend.mdc)
+- [Padrões](ai-docs/coding-standards.mdc)
+- [Deploy, backup e rollback](ai-docs/deployment.md)
+- [Segurança da stack TypeScript](ai-docs/security-typescript.md)
+- [Guia da reescrita](ai-docs/REWRITE_TYPESCRIPT_GUIDE.md)

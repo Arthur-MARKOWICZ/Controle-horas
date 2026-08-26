@@ -81,8 +81,8 @@ A aplicação possui boas práticas em alguns pontos (BCrypt, JWT via variáveis
 |-------|---------|
 | **Severidade** | Alta |
 | **Status** | Documentado (V6 não alterada) |
-| **Descrição** | Checklist SQL em `docs/admin-role-audit.md` para revisão manual. Sem demote automático. |
-| **Onde** | `V6__promote_root_users_to_admin.sql`, `docs/admin-role-audit.md` |
+| **Descrição** | Checklist SQL em `ai-docs/admin-role-audit.md` para revisão manual. Sem demote automático. |
+| **Onde** | `V6__promote_root_users_to_admin.sql`, `ai-docs/admin-role-audit.md` |
 
 ---
 
@@ -242,7 +242,7 @@ A aplicação possui boas práticas em alguns pontos (BCrypt, JWT via variáveis
 1. Avaliar fechamento do **registro → ADMIN** (#1) conforme modelo single vs multi-tenant.
 2. Considerar cookies `httpOnly` + CSRF se a ameaça XSS for prioritária (#7).
 3. Refresh token / denylist persistente se houver múltiplas instâncias (#8).
-4. Auditar papéis no banco com `docs/admin-role-audit.md` (#6).
+4. Auditar papéis no banco com `ai-docs/admin-role-audit.md` (#6).
 
 ---
 
