@@ -1,0 +1,47 @@
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import WorkLogAdjustmentsPage from './WorkLogAdjustmentsPage'
+
+const useUsersMock = vi.fn()
+const getUserHistoryMock = vi.fn()
+const deleteUserWorkLogMock = vi.fn()
+
+vi.mock('../../layouts/MainLayout', () => ({ default: ({ children }: { children: ReactNode }) => children }))
+vi.mock('../../hooks/useUsers', () => ({ useUsers: () => useUsersMock() }))
+vi.mock('../../services/historyService', () => ({
+  getUserHistory: (...args: unknown[]) => getUserHistoryMock(...args),
+  createUserWorkLog: vi.fn(),
+  updateUserWorkLog: vi.fn(),
+  deleteUserWorkLog: (...args: unknown[]) => deleteUserWorkLogMock(...args),
+}))
+
+describe('WorkLogAdjustmentsPage', () => {
+  beforeEach(() => {
+    useUsersMock.mockReturnValue({
+      users: [{ id: 'user-1', name: 'Ana', email: 'ana@example.com' }], isLoading: false, error: '',
+    })
+    getUserHistoryMock.mockResolvedValue({
+      success: true,
+      data: {
+        startDate: '2026-08-01', endDate: '2026-08-31', totalWorkedMinutes: 480, totalBalanceMinutes: 0, hourBankMinutes: 0,
+        days: [{ date: '2026-08-10', workLogs: [{ id: 'log-1', entryAt: '2026-08-10T11:00:00.000Z', exitAt: '2026-08-10T20:00:00.000Z', closeReason: 'EXIT' }] }],
+      },
+    })
+    deleteUserWorkLogMock.mockResolvedValue({ success: true, message: 'Work log deleted successfully', data: null })
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+  })
+
+  it('confirms and deletes a closed work log', async () => {
+    const user = userEvent.setup()
+    render(<WorkLogAdjustmentsPage />)
+
+    const deleteButton = await screen.findByRole('button', { name: 'Excluir' })
+    await user.click(deleteButton)
+
+    expect(window.confirm).toHaveBeenCalledWith('Deseja excluir este registro de ponto? Esta ação não pode ser desfeita.')
+    await waitFor(() => expect(deleteUserWorkLogMock).toHaveBeenCalledWith('user-1', 'log-1'))
+    expect(await screen.findByText('Registro excluído.')).toBeInTheDocument()
+  })
+})

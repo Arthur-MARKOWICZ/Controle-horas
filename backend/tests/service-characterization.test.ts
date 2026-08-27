@@ -205,6 +205,16 @@ describe('Administrative work-log characterization', () => {
     await expect(service.createAdministrative(user(), new Date('2026-07-13T20:00:00Z'), new Date('2026-07-13T11:00:00Z')))
       .rejects.toMatchObject({ statusCode: 400 })
   })
+  it('deletes a closed administrative record', async () => {
+    const deleteClosedWorkLog = vi.fn().mockResolvedValue(true)
+    const service = new WorkLogService(repositories({ deleteClosedWorkLog }), workTime, 'America/Sao_Paulo')
+    await expect(service.deleteAdministrative(user(), 'log')).resolves.toBeUndefined()
+    expect(deleteClosedWorkLog).toHaveBeenCalledWith(user().id, 'log')
+  })
+  it('reports a missing administrative record when deleting', async () => {
+    const service = new WorkLogService(repositories({ deleteClosedWorkLog: vi.fn().mockResolvedValue(false) }), workTime, 'America/Sao_Paulo')
+    await expect(service.deleteAdministrative(user(), 'missing-log')).rejects.toMatchObject({ statusCode: 404 })
+  })
   it('registers entry and exposes the updated dashboard', async () => {
     const openWorkLog = vi.fn(); const dashboard = vi.fn().mockResolvedValue([])
     const service = new WorkLogService(repositories({

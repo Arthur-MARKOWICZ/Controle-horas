@@ -74,6 +74,20 @@ function WorkLogAdjustmentsPage() {
     } finally { setSubmitting(false) }
   }
 
+  const remove = async (log: WorkLog) => {
+    if (!userId || !log.exitAt || !window.confirm('Deseja excluir este registro de ponto? Esta ação não pode ser desfeita.')) return
+    setSubmitting(true); setError(''); setMessage('')
+    try {
+      const response = await historyService.deleteUserWorkLog(userId, log.id)
+      if (!response.success) throw new Error(response.message || 'Não foi possível excluir o registro.')
+      setMessage('Registro excluído.')
+      if (editing?.id === log.id) startCreate()
+      await loadHistory(userId)
+    } catch (requestError) {
+      setError(await getErrorMessage(requestError, 'Não foi possível excluir o registro.'))
+    } finally { setSubmitting(false) }
+  }
+
   const logs = history?.days.flatMap((day) => day.workLogs.map((log) => ({ date: day.date, log }))) ?? []
 
   return <MainLayout><main className={styles.page}>
@@ -103,7 +117,7 @@ function WorkLogAdjustmentsPage() {
       <div className={styles.cardHeader}><h2>Registros de {range.startDate.slice(5).replace('-', '/')}</h2>{loadingHistory && <span>Carregando...</span>}</div>
       {!loadingHistory && logs.length === 0 && <p className={styles.hint}>Nenhum registro encontrado neste mês.</p>}
       {logs.length > 0 && <div className={styles.tableWrapper}><table><thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th /></tr></thead><tbody>
-        {logs.map(({ date, log }) => <tr key={`${date}-${log.id}`}><td>{formatShortDate(date)}</td><td>{formatInstantTime(log.entryAt)}</td><td>{formatInstantTime(log.exitAt)}</td><td><button className={styles.secondaryButton} type="button" disabled={!log.exitAt || submitting} onClick={() => startEdit(log)}>Editar</button></td></tr>)}
+        {logs.map(({ date, log }) => <tr key={`${date}-${log.id}`}><td>{formatShortDate(date)}</td><td>{formatInstantTime(log.entryAt)}</td><td>{formatInstantTime(log.exitAt)}</td><td><div className={styles.rowActions}><button className={styles.secondaryButton} type="button" disabled={!log.exitAt || submitting} onClick={() => startEdit(log)}>Editar</button><button className={styles.deleteButton} type="button" disabled={!log.exitAt || submitting} onClick={() => void remove(log)}>Excluir</button></div></td></tr>)}
       </tbody></table></div>}
     </section>
   </main></MainLayout>

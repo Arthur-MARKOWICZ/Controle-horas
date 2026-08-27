@@ -196,6 +196,16 @@ integration('Fastify with PostgreSQL', () => {
     expect(update.statusCode).toBe(200)
     expect(update.json().data).toMatchObject({ entryAt: '2026-07-13T10:30:00.000Z', exitAt: '2026-07-13T19:30:00.000Z' })
 
+    const deleted = await app.inject({
+      method: 'DELETE', url: `/api/users/${childId}/work-logs/${workLogId}`, headers: auth(admin.token),
+    })
+    expect(deleted.statusCode).toBe(200)
+    expect(deleted.json()).toMatchObject({ success: true, data: null })
+    const missing = await app.inject({
+      method: 'DELETE', url: `/api/users/${childId}/work-logs/${workLogId}`, headers: auth(admin.token),
+    })
+    expect(missing.statusCode).toBe(404)
+
     const employee = await app.inject({
       method: 'POST', url: '/api/auth/mobile/login', payload: { email: 'adjustments-employee@example.com', password: 'Password123' },
     })

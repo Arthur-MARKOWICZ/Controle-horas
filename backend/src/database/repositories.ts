@@ -242,6 +242,26 @@ export class Repositories {
     } finally { client.release() }
   }
 
+  async deleteClosedWorkLog(userId: string, id: string): Promise<boolean> {
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [userId])
+      const existing = await client.query<WorkLogRow>(
+        `SELECT id,user_id,entry_at,exit_at,close_reason,created_at,updated_at FROM work_logs
+         WHERE id=$1 AND user_id=$2 FOR UPDATE`, [id, userId],
+      )
+      if (!existing.rows[0]) { await client.query('COMMIT'); return false }
+      if (!existing.rows[0].exit_at) throw new ConflictError('An open work log cannot be deleted administratively')
+      await client.query('DELETE FROM work_logs WHERE id=$1 AND user_id=$2', [id, userId])
+      await client.query('COMMIT')
+      return true
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined)
+      throw error
+    } finally { client.release() }
+  }
+
   private async findWorkLogById(userId: string, id: string): Promise<WorkLog | null> {
     const result = await this.pool.query<WorkLogRow>(
       `SELECT id,user_id,entry_at,exit_at,close_reason,created_at,updated_at FROM work_logs

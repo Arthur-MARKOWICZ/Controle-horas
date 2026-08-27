@@ -44,6 +44,11 @@ export class WorkLogService {
     return workLogResponse(log)
   }
 
+  async deleteAdministrative(user: User, workLogId: string): Promise<void> {
+    const deleted = await this.repositories.deleteClosedWorkLog(user.id, workLogId)
+    if (!deleted) throw new NotFoundError('Work log not found')
+  }
+
   async dashboard(user: User, now = new Date()): Promise<DashboardResponse> {
     const date = localDateOf(now, this.timeZone)
     const start = localDateStart(date, this.timeZone)

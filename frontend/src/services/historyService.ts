@@ -11,6 +11,8 @@ export const createUserWorkLog = (userId: string, payload: AdministrativeWorkLog
   apiRequest(`/api/users/${userId}/work-logs`, { method: 'POST', body: JSON.stringify(payload) })
 export const updateUserWorkLog = (userId: string, workLogId: string, payload: AdministrativeWorkLogPayload): Promise<ApiResponse<WorkLog>> =>
   apiRequest(`/api/users/${userId}/work-logs/${workLogId}`, { method: 'PUT', body: JSON.stringify(payload) })
+export const deleteUserWorkLog = (userId: string, workLogId: string): Promise<ApiResponse<null>> =>
+  apiRequest(`/api/users/${userId}/work-logs/${workLogId}`, { method: 'DELETE' })
 export const exportExcel = (startDate: string, endDate: string): Promise<Blob> => apiBlob(`/api/history/export.xlsx?${query(startDate, endDate)}`)
 export const exportPdf = (startDate: string, endDate: string): Promise<Blob> => apiBlob(`/api/history/export.pdf?${query(startDate, endDate)}`)
 export const downloadHistoryFile = (blob: Blob, filename: string): void => triggerBrowserDownload(blob, filename)

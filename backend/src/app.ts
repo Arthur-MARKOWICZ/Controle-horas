@@ -298,6 +298,12 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   }, async (request) => ok('Work log updated successfully', await workLogs.updateAdministrative(
     await users.requireAccess(actor(request), request.params.userId), request.params.workLogId, new Date(request.body.entryAt), new Date(request.body.exitAt),
   )))
+  app.delete<{ Params: { userId: string; workLogId: string }}>('/api/users/:userId/work-logs/:workLogId', {
+    preHandler: requireAdminWorkLogAccess, schema: { params: workLogParams() },
+  }, async (request) => {
+    await workLogs.deleteAdministrative(await users.requireAccess(actor(request), request.params.userId), request.params.workLogId)
+    return ok('Work log deleted successfully', null)
+  })
 
   const requireAdmin = async (request: FastifyRequest): Promise<void> => {
     await authenticate(request)
