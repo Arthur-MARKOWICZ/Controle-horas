@@ -7,7 +7,8 @@ Aplicativo React Native/Expo que consome a API Fastify do monorepo.
 - Android/iOS usam `/api/auth/mobile/*`.
 - Access e refresh tokens ficam separados no `SecureStore`.
 - O refresh token é rotacionado em cada renovação.
-- A biometria protege o refresh token e sempre cria uma sessão nova.
+- A biometria protege uma credencial aleatória independente do refresh token e sempre cria uma sessão nova.
+- O login biométrico lê o segredo protegido uma única vez; a rotação da sessão não altera essa credencial.
 - Expo Web usa os endpoints web e o cookie `HttpOnly`.
 
 ## Execução

@@ -14,6 +14,12 @@ export interface SessionResponse {
   accessTokenExpiresAt: string; refreshToken?: string; refreshTokenExpiresAt: string
 }
 
+export interface BiometricCredentialResponse {
+  credentialId: string
+  credentialSecret: string
+  email: string
+}
+
 function hashToken(token: string): string { return createHash('sha256').update(token).digest('hex') }
 
 export class AccessTokenDenylist {
@@ -54,6 +60,30 @@ export class AuthService {
     return this.createSession(user, includeRefresh)
   }
 
+  async createBiometricCredential(user: User): Promise<BiometricCredentialResponse> {
+    const credentialId = randomUUID()
+    const credentialSecret = randomBytes(32).toString('base64url')
+    await this.repositories.createBiometricCredential({
+      id: credentialId, userId: user.id, secretHash: hashToken(credentialSecret),
+    })
+    return { credentialId, credentialSecret, email: user.email }
+  }
+
+  async biometricLogin(
+    input: { email: string; credentialId: string; credentialSecret: string },
+    includeRefresh: boolean,
+  ): Promise<SessionResponse> {
+    const userId = await this.repositories.useBiometricCredential(
+      input.credentialId, hashToken(input.credentialSecret), input.email.trim().toLowerCase(),
+    )
+    if (!userId) throw new UnauthorizedError('Biometric credentials are invalid')
+    return this.createSession(await this.users.byId(userId), includeRefresh)
+  }
+
+  async revokeBiometricCredential(user: User, credentialId: string): Promise<void> {
+    await this.repositories.revokeBiometricCredential(credentialId, user.id)
+  }
+
   async refresh(token: string, includeRefresh: boolean): Promise<SessionResponse> {
     let claims: JwtClaims
     try { claims = this.refreshJwt.verify(token) } catch { throw new UnauthorizedError('Refresh token is invalid or expired') }
@@ -92,6 +122,7 @@ export class AuthService {
     if (!(await bcrypt.compare(currentPassword, user.passwordHash))) throw new InvalidCredentialsError()
     await this.repositories.updatePassword(user.id, await bcrypt.hash(newPassword, this.bcryptRounds))
     await this.repositories.revokeAllRefreshTokens(user.id)
+    await this.repositories.revokeAllBiometricCredentials(user.id)
   }
 
   async requestPasswordReset(emailInput: string): Promise<void> {

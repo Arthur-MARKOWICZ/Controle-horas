@@ -29,7 +29,7 @@ Somente o Nginx publica porta na VM. O backend e o banco permanecem na rede priv
 
 O access JWT dura 15 minutos por padrão e contém `sub`, `jti` e `type=access`. O refresh JWT dura 30 dias, é rotacionado em cada uso e somente seu SHA-256 é persistido. Reutilização revoga a família.
 
-No web, o access token fica em memória e o refresh fica em cookie `HttpOnly`, `SameSite=Strict`, `Path=/api/auth`. No mobile, ambos ficam no `SecureStore`; biometria protege o refresh token e sempre solicita uma renovação.
+No web, o access token fica em memória e o refresh fica em cookie `HttpOnly`, `SameSite=Strict`, `Path=/api/auth`. No mobile, access e refresh ficam no `SecureStore`. O login biométrico usa uma credencial aleatória independente por aparelho: somente seu SHA-256 fica no banco e o segredo local fica protegido pela biometria. Depois da validação, o backend emite uma sessão access/refresh normal.
 
 ## Migrations
 

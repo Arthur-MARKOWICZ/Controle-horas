@@ -35,6 +35,8 @@ interface BuildOptions { config?: AppConfig; pool?: Pool; logger?: boolean }
 interface LoginBody { email: string; password: string }
 interface RegisterBody extends LoginBody { name: string }
 interface RefreshBody { refreshToken: string }
+interface BiometricLoginBody { email: string; credentialId: string; credentialSecret: string }
+interface CredentialParams { credentialId: string }
 interface ManagerBody { managerId: string | null }
 interface HistoryQuery { startDate: string; endDate: string; limit?: string; offset?: string }
 interface AdministrativeWorkLogBody { entryAt: string; exitAt: string }
@@ -87,8 +89,9 @@ function withoutRefresh(session: SessionResponse): { response: Omit<SessionRespo
 
 function integerQuery(value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback
-  const parsed = Number.parseInt(value, 10)
-  if (!Number.isInteger(parsed)) throw new ValidationError('Pagination values must be integers')
+  if (!/^-?\d+$/.test(value)) throw new ValidationError('Pagination values must be integers')
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) throw new ValidationError('Pagination values must be integers')
   return parsed
 }
 
@@ -96,7 +99,10 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   const config = options.config || loadConfig()
   const pool = options.pool || createPool(config)
   const app = Fastify({
-    logger: options.logger === false ? false : { level: config.logLevel, redact: ['req.headers.authorization', 'req.headers.cookie', 'body.password', 'body.refreshToken'] },
+    logger: options.logger === false ? false : {
+      level: config.logLevel,
+      redact: ['req.headers.authorization', 'req.headers.cookie', 'body.password', 'body.refreshToken', 'body.credentialSecret'],
+    },
     trustProxy: 1, bodyLimit: 2 * 1024 * 1024 + 64 * 1024,
   })
   app.decorateRequest('authUser', null)
@@ -110,7 +116,7 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   })
   await app.register(helmet, { contentSecurityPolicy: false, strictTransportSecurity: false })
   await app.register(multipart, { limits: { files: 1, fileSize: 2 * 1024 * 1024, parts: 2 } })
-  await app.register(rateLimit, { global: false })
+  await app.register(rateLimit, { global: false, hook: 'preValidation' })
   await app.register(jwt, { secret: config.jwtAccessSecret, namespace: 'access' })
   await app.register(jwt, { secret: config.jwtRefreshSecret, namespace: 'refresh' })
   if (config.openApiEnabled) {
@@ -224,6 +230,35 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   app.post<{ Body: LoginBody }>('/api/auth/mobile/login', {
     schema: loginSchema, config: { rateLimit: authRateLimit },
   }, async (request) => ok('Login successful', await auth.login(request.body, true)))
+  app.post('/api/auth/mobile/biometric-credentials', {
+    preHandler: authenticate,
+  }, async (request) => ok('Biometric credential created successfully', await auth.createBiometricCredential(actor(request))))
+  app.post<{ Body: BiometricLoginBody }>('/api/auth/mobile/biometric-login', {
+    schema: {
+      body: {
+        type: 'object', additionalProperties: false,
+        required: ['email', 'credentialId', 'credentialSecret'],
+        properties: {
+          email: { type: 'string', format: 'email', maxLength: 255 },
+          credentialId: { type: 'string', format: 'uuid' },
+          credentialSecret: { type: 'string', minLength: 43, maxLength: 43 },
+        },
+      },
+    },
+    config: { rateLimit: authRateLimit },
+  }, async (request) => ok('Login successful', await auth.biometricLogin(request.body, true)))
+  app.delete<{ Params: CredentialParams }>('/api/auth/mobile/biometric-credentials/:credentialId', {
+    preHandler: authenticate,
+    schema: {
+      params: {
+        type: 'object', additionalProperties: false, required: ['credentialId'],
+        properties: { credentialId: { type: 'string', format: 'uuid' } },
+      },
+    },
+  }, async (request) => {
+    await auth.revokeBiometricCredential(actor(request), request.params.credentialId)
+    return ok('Biometric credential revoked successfully', null)
+  })
   app.post<{ Body: RefreshBody }>('/api/auth/mobile/refresh', {
     schema: { body: { type: 'object', additionalProperties: false, required: ['refreshToken'], properties: { refreshToken: { type: 'string', minLength: 1 } } } },
   }, async (request) => ok('Session refreshed successfully', await auth.refresh(request.body.refreshToken, true)))

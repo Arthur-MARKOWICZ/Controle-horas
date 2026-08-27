@@ -95,6 +95,8 @@ export interface RefreshTokenRecord {
   id: string; familyId: string; userId: string; tokenHash: string; expiresAt: Date
 }
 
+export interface BiometricCredentialRecord { id: string; userId: string; secretHash: string }
+
 export interface PasswordResetTokenRecord { id: string; userId: string; tokenHash: string; expiresAt: Date }
 
 export interface ImportedWorkLog {
@@ -444,6 +446,43 @@ export class Repositories {
     )
   }
 
+  async createBiometricCredential(record: BiometricCredentialRecord): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO mobile_biometric_credentials(id,user_id,secret_hash)
+       VALUES ($1,$2,$3)`,
+      [record.id, record.userId, record.secretHash],
+    )
+  }
+
+  async useBiometricCredential(id: string, secretHash: string, email: string): Promise<string | null> {
+    const result = await this.pool.query<{ user_id: string }>(
+      `UPDATE mobile_biometric_credentials credential SET last_used_at=NOW()
+       FROM users user_account
+       WHERE credential.id=$1 AND credential.secret_hash=$2
+         AND credential.revoked_at IS NULL
+         AND user_account.id=credential.user_id AND user_account.email=$3
+       RETURNING credential.user_id`,
+      [id, secretHash, email],
+    )
+    return result.rows[0]?.user_id || null
+  }
+
+  async revokeBiometricCredential(id: string, userId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE mobile_biometric_credentials SET revoked_at=COALESCE(revoked_at,NOW())
+       WHERE id=$1 AND user_id=$2`,
+      [id, userId],
+    )
+  }
+
+  async revokeAllBiometricCredentials(userId: string, client: DatabaseClient = this.pool): Promise<void> {
+    await client.query(
+      `UPDATE mobile_biometric_credentials SET revoked_at=COALESCE(revoked_at,NOW())
+       WHERE user_id=$1`,
+      [userId],
+    )
+  }
+
   async rotateRefreshToken(currentId: string, tokenHash: string, next: RefreshTokenRecord): Promise<string> {
     const client = await this.pool.connect()
     try {
@@ -517,6 +556,7 @@ export class Repositories {
       if (!token) { await client.query('COMMIT'); return false }
       await client.query('UPDATE users SET password_hash=$2,updated_at=NOW() WHERE id=$1', [token.user_id, passwordHash])
       await this.revokeAllRefreshTokens(token.user_id, client)
+      await this.revokeAllBiometricCredentials(token.user_id, client)
       await client.query('COMMIT')
       return true
     } catch (error) {

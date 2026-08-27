@@ -14,6 +14,6 @@ As páginas são carregadas com `React.lazy`. O backend é a fonte oficial de sa
 
 ## Mobile
 
-Android/iOS usam `/api/auth/mobile/*` e armazenam access/refresh no `SecureStore`. O Expo Web usa `/api/auth/*` e cookies. Ao ativar biometria, o dado protegido é o refresh token; cada desbloqueio o troca por uma sessão nova e atualiza o token rotacionado.
+Android/iOS usam `/api/auth/mobile/*` e armazenam access/refresh no `SecureStore`. O Expo Web usa `/api/auth/*` e cookies. Ao ativar biometria, o aparelho protege uma credencial aleatória independente da sessão. Cada desbloqueio lê essa credencial uma única vez e solicita uma sessão access/refresh nova, sem regravar o segredo biométrico.
 
 Alterações específicas de publicação em `mobile/app.json` e `mobile/eas.json` devem ser preservadas.

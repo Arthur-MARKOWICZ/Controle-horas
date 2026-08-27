@@ -3,6 +3,7 @@ const translations = {
   'Authentication is required': 'É necessário entrar para continuar.',
   'Access token is invalid or expired': 'Sua sessão expirou. Entre novamente.',
   'Refresh token is invalid or expired': 'Sua sessão expirou. Entre novamente.',
+  'Biometric credentials are invalid': 'A credencial biométrica não é mais válida. Entre com sua senha e ative-a novamente.',
   'You do not have permission to perform this operation': 'Você não tem permissão para realizar esta operação.',
   'The operation conflicts with existing data.': 'A operação conflita com dados já existentes.',
 }

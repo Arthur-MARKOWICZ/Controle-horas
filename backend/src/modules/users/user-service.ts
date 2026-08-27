@@ -149,8 +149,11 @@ export class UserService {
       const manager = await this.requireAccess(actor, managerId)
       if (manager.role !== 'ADMIN' && manager.role !== 'MANAGER') throw new ValidationError('Assigned manager must have MANAGER or ADMIN role')
     }
+    const emailChanged = email !== target.email
     target = this.schedule({ ...target, name: input.name.trim(), email, role, managerId }, input)
-    return this.response(await this.repositories.saveUser(target))
+    const saved = await this.repositories.saveUser(target)
+    if (emailChanged) await this.repositories.revokeAllBiometricCredentials(target.id)
+    return this.response(saved)
   }
 
   async assignManager(actor: User, targetId: string, managerId: string | null): Promise<object> {

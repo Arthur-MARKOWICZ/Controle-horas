@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { createHash, randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import pg from 'pg'
 import { buildApp } from '../src/app.js'
@@ -50,9 +51,9 @@ integration('Fastify with PostgreSQL', () => {
     if (pool) await pool.end()
   })
 
-  it('runs a new database and safely adopts successful Flyway V1-V11 before V13', async () => {
+  it('runs a new database and safely adopts successful Flyway V1-V11 through the latest migration', async () => {
     const versions = await pool.query<{ version: number }>('SELECT version FROM app_schema_migrations ORDER BY version')
-    expect(versions.rows.map((row) => row.version)).toEqual([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])
+    expect(versions.rows.map((row) => row.version)).toEqual([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16])
     expect((await app.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(200)
 
     const adoptedDatabase = 'controle_horas_adopt_test'
@@ -64,6 +65,7 @@ integration('Fastify with PostgreSQL', () => {
       process.env.DATABASE_URL = adoptedUrl.toString()
       await runMigrations()
       adoptedPool = new pg.Pool({ connectionString: adoptedUrl.toString() })
+      await adoptedPool.query('DROP TABLE mobile_biometric_credentials')
       await adoptedPool.query('DROP TABLE auth_refresh_tokens')
       await adoptedPool.query('DROP TABLE password_reset_tokens')
       await adoptedPool.query('ALTER TABLE users DROP COLUMN hour_bank_minutes')
@@ -87,7 +89,7 @@ integration('Fastify with PostgreSQL', () => {
         'SELECT version,source FROM app_schema_migrations ORDER BY version',
       )
       expect(adopted.rows.filter((row) => row.version <= 11).every((row) => row.source === 'flyway')).toBe(true)
-      expect(adopted.rows.at(-1)).toEqual({ version: 15, source: 'typescript' })
+      expect(adopted.rows.at(-1)).toEqual({ version: 16, source: 'typescript' })
     } finally {
       process.env.DATABASE_URL = databaseUrl
       if (adoptedPool) await adoptedPool.end()
@@ -104,6 +106,83 @@ integration('Fastify with PostgreSQL', () => {
     expect(reuse.statusCode).toBe(401)
     const revokedFamily = await app.inject({ method: 'POST', url: '/api/auth/mobile/refresh', payload: { refreshToken: secondToken } })
     expect(revokedFamily.statusCode).toBe(401)
+  })
+
+  it('uses a hashed device credential for biometric login without coupling it to refresh rotation', async () => {
+    const passwordSession = await mobileRegister('biometric@example.com')
+    const created = await app.inject({
+      method: 'POST', url: '/api/auth/mobile/biometric-credentials', headers: auth(passwordSession.token),
+    })
+    expect(created.statusCode).toBe(200)
+    const credential = created.json().data as { credentialId: string; credentialSecret: string; email: string }
+    const secondCredential = (await app.inject({
+      method: 'POST', url: '/api/auth/mobile/biometric-credentials', headers: auth(passwordSession.token),
+    })).json().data as { credentialId: string; credentialSecret: string; email: string }
+    const stored = await pool.query<{ secret_hash: string; last_used_at: Date | null }>(
+      'SELECT secret_hash,last_used_at FROM mobile_biometric_credentials WHERE id=$1', [credential.credentialId],
+    )
+    expect(stored.rows[0]?.secret_hash).toMatch(/^[a-f0-9]{64}$/)
+    expect(stored.rows[0]?.secret_hash).not.toBe(credential.credentialSecret)
+    expect(stored.rows[0]?.last_used_at).toBeNull()
+
+    const login = await app.inject({
+      method: 'POST', url: '/api/auth/mobile/biometric-login',
+      payload: credential,
+    })
+    expect(login.statusCode).toBe(200)
+    const biometricSession = login.json().data as { token: string; refreshToken: string }
+    expect((await pool.query('SELECT last_used_at FROM mobile_biometric_credentials WHERE id=$1', [credential.credentialId])).rows[0]?.last_used_at).toBeTruthy()
+
+    const rotated = await app.inject({
+      method: 'POST', url: '/api/auth/mobile/refresh', payload: { refreshToken: biometricSession.refreshToken },
+    })
+    expect(rotated.statusCode).toBe(200)
+    expect((await app.inject({
+      method: 'POST', url: '/api/auth/mobile/biometric-login', payload: credential,
+    })).statusCode).toBe(200)
+
+    expect((await app.inject({
+      method: 'POST', url: '/api/auth/mobile/biometric-login',
+      payload: { ...credential, email: 'wrong@example.com' },
+    })).statusCode).toBe(401)
+    expect((await app.inject({
+      method: 'POST', url: '/api/auth/mobile/biometric-login',
+      payload: { ...credential, credentialSecret: 'x'.repeat(43) },
+    })).statusCode).toBe(401)
+
+    const revoked = await app.inject({
+      method: 'DELETE', url: `/api/auth/mobile/biometric-credentials/${credential.credentialId}`,
+      headers: auth(biometricSession.token),
+    })
+    expect(revoked.statusCode).toBe(200)
+    expect((await app.inject({
+      method: 'POST', url: '/api/auth/mobile/biometric-login', payload: credential,
+    })).statusCode).toBe(401)
+    expect((await app.inject({
+      method: 'POST', url: '/api/auth/mobile/biometric-login', payload: secondCredential,
+    })).statusCode).toBe(200)
+  })
+
+  it('revokes every biometric credential during password reset', async () => {
+    const session = await mobileRegister('biometric-reset@example.com')
+    const credential = (await app.inject({
+      method: 'POST', url: '/api/auth/mobile/biometric-credentials', headers: auth(session.token),
+    })).json().data as { credentialId: string; credentialSecret: string; email: string }
+    const resetToken = 'r'.repeat(43)
+    await pool.query(
+      `INSERT INTO password_reset_tokens(id,user_id,token_hash,expires_at)
+       VALUES ($1,$2,$3,NOW() + INTERVAL '30 minutes')`,
+      [randomUUID(), session.userId, createHash('sha256').update(resetToken).digest('hex')],
+    )
+
+    const reset = await app.inject({
+      method: 'POST', url: '/api/auth/password-reset/confirm',
+      payload: { token: resetToken, newPassword: 'NewPassword123' },
+    })
+    expect(reset.statusCode).toBe(200)
+    expect((await app.inject({
+      method: 'POST', url: '/api/auth/mobile/biometric-login', payload: credential,
+    })).statusCode).toBe(401)
   })
 
   it('isolates independent organization trees', async () => {

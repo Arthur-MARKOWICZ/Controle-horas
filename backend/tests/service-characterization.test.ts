@@ -100,8 +100,14 @@ describe('UserService characterization', () => {
   it('allows only administrators to change a user email address', async () => {
     const target = user({ id: 'child', role: 'USER' })
     const saveUser = vi.fn(async (value: User) => value)
-    const admin = new UserService(repositories({ findUserById: vi.fn().mockResolvedValue(target), saveUser, isInCreatedSubtree: vi.fn().mockResolvedValue(true), emailExists: vi.fn().mockResolvedValue(false) }), 10)
+    const revokeAllBiometricCredentials = vi.fn()
+    const admin = new UserService(repositories({
+      findUserById: vi.fn().mockResolvedValue(target), saveUser,
+      isInCreatedSubtree: vi.fn().mockResolvedValue(true), emailExists: vi.fn().mockResolvedValue(false),
+      revokeAllBiometricCredentials,
+    }), 10)
     await expect(admin.update(user(), target.id, { name: 'Child', email: 'NEW@example.com' })).resolves.toMatchObject({ email: 'new@example.com' })
+    expect(revokeAllBiometricCredentials).toHaveBeenCalledWith(target.id)
     const manager = new UserService(repositories({ findUserById: vi.fn().mockResolvedValue(target) }), 10)
     await expect(manager.update(user({ role: 'MANAGER' }), target.id, { name: 'Child', email: 'new@example.com' })).rejects.toMatchObject({ statusCode: 403 })
   })
@@ -137,6 +143,45 @@ describe('AuthService characterization', () => {
     const result = await service({ findUserByEmail: vi.fn().mockResolvedValue(user({ passwordHash })) }).auth.login({ email: 'x@y.com', password: 'Password123' }, true)
     expect(result.token).toBeTruthy(); expect(result.refreshToken).toBeTruthy()
   })
+  it('creates a random biometric secret and persists only its SHA-256 hash', async () => {
+    const createBiometricCredential = vi.fn()
+    const result = await service({ createBiometricCredential }).auth.createBiometricCredential(user())
+    expect(result.credentialSecret).toHaveLength(43)
+    expect(result.email).toBe(user().email)
+    expect(createBiometricCredential).toHaveBeenCalledWith(expect.objectContaining({
+      id: result.credentialId,
+      userId: user().id,
+      secretHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    }))
+    expect(createBiometricCredential.mock.calls[0]![0].secretHash).not.toBe(result.credentialSecret)
+  })
+  it('creates a normal rotating session from valid biometric credentials', async () => {
+    const useBiometricCredential = vi.fn().mockResolvedValue(user().id)
+    const result = await service({
+      useBiometricCredential,
+      findUserById: vi.fn().mockResolvedValue(user()),
+    }).auth.biometricLogin({
+      email: ' ROOT@example.com ',
+      credentialId: '00000000-0000-4000-8000-000000000009',
+      credentialSecret: 's'.repeat(43),
+    }, true)
+    expect(useBiometricCredential).toHaveBeenCalledWith(
+      '00000000-0000-4000-8000-000000000009', expect.stringMatching(/^[a-f0-9]{64}$/), 'root@example.com',
+    )
+    expect(result.refreshToken).toBeTruthy()
+  })
+  it('returns the same unauthorized response for an invalid biometric credential', async () => {
+    await expect(service({ useBiometricCredential: vi.fn().mockResolvedValue(null) }).auth.biometricLogin({
+      email: 'root@example.com',
+      credentialId: '00000000-0000-4000-8000-000000000009',
+      credentialSecret: 's'.repeat(43),
+    }, true)).rejects.toMatchObject({ statusCode: 401, message: 'Biometric credentials are invalid' })
+  })
+  it('revokes only the biometric credential owned by the current user', async () => {
+    const revokeBiometricCredential = vi.fn()
+    await service({ revokeBiometricCredential }).auth.revokeBiometricCredential(user(), 'credential-id')
+    expect(revokeBiometricCredential).toHaveBeenCalledWith('credential-id', user().id)
+  })
   it('omits refresh token when requested by an internal caller', async () => {
     const result = await service({ findUserByEmail: vi.fn().mockResolvedValue(user({ passwordHash })) }).auth.login({ email: 'x@y.com', password: 'Password123' }, false)
     expect(result.refreshToken).toBeUndefined()
@@ -170,10 +215,11 @@ describe('AuthService characterization', () => {
     expect(revokeRefreshFamily).toHaveBeenCalledOnce()
   })
   it('changes the password only after validating the current password and revokes all sessions', async () => {
-    const updatePassword = vi.fn(); const revokeAllRefreshTokens = vi.fn()
-    await service({ updatePassword, revokeAllRefreshTokens }).auth.changePassword(user({ passwordHash }), 'Password123', 'NewPassword123')
+    const updatePassword = vi.fn(); const revokeAllRefreshTokens = vi.fn(); const revokeAllBiometricCredentials = vi.fn()
+    await service({ updatePassword, revokeAllRefreshTokens, revokeAllBiometricCredentials }).auth.changePassword(user({ passwordHash }), 'Password123', 'NewPassword123')
     expect(updatePassword).toHaveBeenCalledWith(user().id, expect.any(String))
     expect(revokeAllRefreshTokens).toHaveBeenCalledWith(user().id)
+    expect(revokeAllBiometricCredentials).toHaveBeenCalledWith(user().id)
   })
   it('creates a hashed, expiring reset token and sends only its link by email', async () => {
     const sendPasswordReset = vi.fn()

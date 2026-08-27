@@ -2,7 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import * as authService from '../services/authService'
 import { setUnauthorizedHandler } from '../services/api'
 import { clearSession, readSession, saveSession } from '../services/sessionStorage'
-import { clearBiometricLogin, enableBiometricLogin, isBiometricLoginAvailable, readBiometricSession } from '../services/localCredentialsService'
+import {
+  clearBiometricLogin,
+  isBiometricLoginAvailable,
+  migrateLegacyBiometricLogin,
+  readBiometricCredential,
+  readBiometricMetadata,
+  saveBiometricCredential,
+} from '../services/localCredentialsService'
 
 const emptySession = { token: null, user: null, ready: false, isBiometricSession: false }
 const AuthContext = createContext(null)
@@ -14,13 +21,18 @@ export function AuthProvider({ children }) {
     setSession({ ...emptySession, ready: true })
   }, [])
   useEffect(() => {
-    setUnauthorizedHandler(() => clear({ clearBiometric: session.isBiometricSession }))
+    setUnauthorizedHandler(() => clear())
     return () => setUnauthorizedHandler(null)
-  }, [clear, session.isBiometricSession])
+  }, [clear])
   useEffect(() => {
     let active = true
     ;(async () => {
       try {
+        if (await migrateLegacyBiometricLogin()) {
+          await clearSession()
+          if (active) setSession({ ...emptySession, ready: true })
+          return
+        }
         if (await isBiometricLoginAvailable()) {
           await clearSession()
           if (active) setSession({ ...emptySession, ready: true })
@@ -44,15 +56,26 @@ export function AuthProvider({ children }) {
     setSession({ token: response.data.token, user, ready: true, isBiometricSession: false })
     return response.data
   }, [])
-  const loginWithBiometrics = useCallback(async () => {
+  const enableBiometricLogin = useCallback(async () => {
+    const response = await authService.createBiometricCredential()
+    if (!response.success || !response.data) throw new Error(response.message || 'Falha ao criar a credencial biométrica.')
     try {
-      const biometricSession = await readBiometricSession()
-      const data = await authService.refresh(biometricSession.refreshToken)
-      await enableBiometricLogin(data)
-      const user = await saveSession(data)
-      setSession({ token: data.token, user, ready: true, isBiometricSession: true })
+      await saveBiometricCredential(response.data)
     } catch (error) {
       await clearBiometricLogin()
+      await authService.revokeBiometricCredential(response.data.credentialId).catch(() => undefined)
+      throw error
+    }
+  }, [])
+  const loginWithBiometrics = useCallback(async (email) => {
+    try {
+      const credential = await readBiometricCredential(email)
+      const response = await authService.biometricLogin(credential)
+      if (!response.success || !response.data) throw new Error(response.message || 'Falha na autenticação biométrica.')
+      const user = await saveSession(response.data)
+      setSession({ token: response.data.token, user, ready: true, isBiometricSession: true })
+    } catch (error) {
+      if (error?.response?.status === 401 || error?.biometricReason === 'invalidated') await clearBiometricLogin()
       throw error
     }
   }, [])
@@ -66,8 +89,16 @@ export function AuthProvider({ children }) {
     loginWithBiometrics,
     enableBiometricLogin,
     isBiometricLoginAvailable,
-    logout: async () => { try { await authService.logout() } finally { await clear({ clearBiometric: true }) } },
-  }), [session, authenticate, clear, loginWithBiometrics])
+    logout: async () => {
+      try {
+        const metadata = await readBiometricMetadata()
+        if (metadata) await authService.revokeBiometricCredential(metadata.credentialId)
+        await authService.logout()
+      } finally {
+        await clear({ clearBiometric: true })
+      }
+    },
+  }), [session, authenticate, clear, enableBiometricLogin, loginWithBiometrics])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 export function useAuth() {
