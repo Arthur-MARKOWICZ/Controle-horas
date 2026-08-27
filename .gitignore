@@ -7,4 +7,5 @@
 backend/.migration-test/
 backup-*.dump
 backup-*.enc
+load/results/
 .trae/

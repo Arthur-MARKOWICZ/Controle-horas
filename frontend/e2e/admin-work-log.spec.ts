@@ -67,6 +67,6 @@ test('admin deletes a closed work log after confirmation', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Excluir' })).toBeVisible()
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: 'Excluir' }).click()
-  await expect(page.getByText('Registro excluído.')).toBeVisible()
-  await expect(page.getByText('Nenhum registro encontrado neste mês.')).toBeVisible()
+  await expect(page.getByText('Registro excluído e banco de horas recalculado.')).toBeVisible()
+  await expect(page.getByText('Nenhum registro encontrado neste período.')).toBeVisible()
 })

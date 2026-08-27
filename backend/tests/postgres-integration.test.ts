@@ -390,4 +390,44 @@ integration('Fastify with PostgreSQL', () => {
     expect(limited?.statusCode).toBe(429)
     expect(limited?.json()).toMatchObject({ success: false, data: null })
   })
+
+  it('rejects malformed public inputs and keeps SQL-looking names as literal data', async () => {
+    const admin = await mobileRegister('validation-admin@example.com')
+    const weakPassword = await app.inject({
+      method: 'POST', url: '/api/auth/mobile/register',
+      payload: { name: 'Weak password', email: 'weak@example.com', password: 'password' },
+    })
+    expect(weakPassword.statusCode).toBe(400)
+    expect(weakPassword.json()).toMatchObject({ success: false, data: null })
+    expect(weakPassword.json().message).toContain('pattern')
+
+    const invalidDate = await app.inject({
+      method: 'GET', url: '/api/history?startDate=nome&endDate=2026-08-27', headers: auth(admin.token),
+    })
+    expect(invalidDate.statusCode).toBe(400)
+    expect(invalidDate.json()).toMatchObject({ success: false, data: null })
+
+    const invalidPagination = await app.inject({
+      method: 'GET', url: '/api/history?startDate=2026-08-01&endDate=2026-08-27&limit=1;SELECT', headers: auth(admin.token),
+    })
+    expect(invalidPagination.statusCode).toBe(400)
+    expect(invalidPagination.json().message).toContain('Pagination values must be integers')
+
+    const invalidId = await app.inject({
+      method: 'GET', url: "/api/users/'%20OR%201=1--/dashboard", headers: auth(admin.token),
+    })
+    expect(invalidId.statusCode).toBe(400)
+    expect(invalidId.json()).toMatchObject({ success: false, data: null })
+
+    const sqlLookingName = "Ana'); DROP TABLE users; --"
+    const created = await app.inject({
+      method: 'POST', url: '/api/users', headers: auth(admin.token),
+      payload: { name: sqlLookingName, email: 'literal-name@example.com', password: 'Password123', role: 'USER' },
+    })
+    expect(created.statusCode).toBe(201)
+    const userId = created.json().data.id as string
+    expect((await pool.query<{ name: string }>('SELECT name FROM users WHERE id=$1', [userId])).rows[0])
+      .toEqual({ name: sqlLookingName })
+    expect((await pool.query('SELECT count(*) FROM users')).rows[0]?.count).toBe('2')
+  })
 })

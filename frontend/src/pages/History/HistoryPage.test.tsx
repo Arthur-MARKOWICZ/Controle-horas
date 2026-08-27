@@ -116,6 +116,23 @@ describe('HistoryPage', () => {
     })
   })
 
+  it('blocks an inverted or malformed period with a clear Portuguese error', async () => {
+    const user = userEvent.setup()
+    const loadHistory = vi.fn()
+    useHistoryMock.mockReturnValue({
+      history: null, startDate: monthRange.startDate, endDate: monthRange.endDate,
+      isLoading: false, isExporting: false, error: '', exportError: '', loadHistory, exportHistory: vi.fn(),
+    })
+    renderHistory()
+    await user.clear(screen.getByLabelText('Data inicial'))
+    await user.type(screen.getByLabelText('Data inicial'), '2026-08-10')
+    await user.clear(screen.getByLabelText('Data final'))
+    await user.type(screen.getByLabelText('Data final'), '2026-08-01')
+    await user.click(screen.getByRole('button', { name: 'Filtrar' }))
+    expect(await screen.findByText('A data inicial deve ser menor ou igual à data final.')).toBeInTheDocument()
+    expect(loadHistory).not.toHaveBeenCalled()
+  })
+
   it('loads the selected history page', async () => {
     const user = userEvent.setup()
     const loadHistory = vi.fn()

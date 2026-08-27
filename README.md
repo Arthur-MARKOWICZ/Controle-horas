@@ -71,6 +71,10 @@ npm run test:coverage
 npx expo export --platform web
 ```
 
+## Carga
+
+O ambiente descartável de carga limita Nginx, backend e PostgreSQL a 1 vCPU e 960 MiB somados; o k6 fica fora desse orçamento. Consulte [load/README.md](load/README.md) para preparar usuários sintéticos, garantir 10 usuários simultâneos ou executar a rampa de capacidade.
+
 Os relatórios de cobertura são gerados em `backend/coverage/`, `frontend/coverage/` e `mobile/coverage/`, em HTML e LCOV quando suportado pelo executor. O backend exige no mínimo 80% de statements, linhas e funções (70% de branches) nos serviços, domínio, utilitários e configuração; os adaptadores HTTP/PostgreSQL são exercitados pela suíte E2E com `TEST_DATABASE_URL`. O E2E web usa Playwright/Chromium e cobre o fluxo administrativo de criação de ponto no navegador.
 
 Os testes PostgreSQL do backend são habilitados quando `TEST_DATABASE_URL` está definido. O CI usa PostgreSQL 16 real, executa V1–V13, os testes de integração e os builds das duas imagens.

@@ -1,0 +1,32 @@
+name: Load test
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Load profile"
+        required: true
+        default: guarantee-10
+        type: choice
+        options: [guarantee-10, capacity]
+
+permissions:
+  contents: read
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run disposable load test
+        run: |
+          chmod +x load/run.sh
+          ./load/run.sh "${{ inputs.mode }}"
+      - name: Upload load-test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-${{ inputs.mode }}
+          path: load/results/
+          if-no-files-found: warn

@@ -12,6 +12,7 @@
     "start": "node --enable-source-maps dist/server.js",
     "migrate": "node --enable-source-maps dist/database/migrate.js",
     "migrate:dev": "tsx src/database/migrate.ts",
+    "load:seed": "node --enable-source-maps dist/load/seed.js",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src tests",
     "test": "vitest run",
