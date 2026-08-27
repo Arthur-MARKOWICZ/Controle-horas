@@ -23,6 +23,13 @@ function repositories(methods: Record<string, unknown> = {}): Repositories {
   return methods as unknown as Repositories
 }
 
+function workLog(entryAt: string, exitAt: string): import('../src/domain/types.js').WorkLog {
+  return {
+    id: 'imported-log', userId: user().id, entryAt: new Date(entryAt), exitAt: new Date(exitAt), closeReason: 'EXIT',
+    createdAt: new Date(entryAt), updatedAt: new Date(exitAt),
+  }
+}
+
 describe('UserService characterization', () => {
   it('returns only public current-user fields', () => {
     expect(new UserService(repositories(), 10).currentUser(user())).toEqual({
@@ -211,6 +218,18 @@ describe('Administrative work-log characterization', () => {
     await expect(service.register(user(), 'pause', now)).rejects.toMatchObject({ statusCode: 409 })
     await expect(service.register(user({ lunchEnabled: false }), 'lunch', now)).rejects.toMatchObject({ statusCode: 400 })
   })
+  it('includes imported work before the start date in the dashboard hour bank', async () => {
+    const imported = workLog('2026-07-13T11:00:00Z', '2026-07-13T20:00:00Z')
+    const service = new WorkLogService(repositories({
+      findWorkLogsOverlappingRange: vi.fn().mockResolvedValue([]),
+      findFirstWorkLog: vi.fn().mockResolvedValue(imported),
+      findWorkLogsUntil: vi.fn().mockResolvedValue([imported]),
+    }), workTime, 'America/Sao_Paulo')
+
+    const result = await service.dashboard(user({ workStartDate: '2026-07-14' }), now)
+
+    expect(result.hourBankMinutes).toBe(60)
+  })
 })
 
 describe('HistoryService characterization', () => {
@@ -239,5 +258,20 @@ describe('HistoryService characterization', () => {
     const result = await history().get(user({ workStartDate: '2026-07-13' }), '2026-07-13', '2026-07-14', 1, 0, now)
     expect(result.pagination).toEqual({ limit: 1, offset: 0, total: 1 })
     expect(result).toHaveProperty('totalWorkedMinutes')
+  })
+  it('accumulates imported work before the start date independently of the selected period', async () => {
+    const imported = workLog('2026-07-13T11:00:00Z', '2026-07-13T20:00:00Z')
+    const findWorkLogsUntil = vi.fn().mockResolvedValue([imported])
+    const service = history({ findFirstWorkLog: vi.fn().mockResolvedValue(imported), findWorkLogsUntil })
+    const account = user({ workStartDate: '2026-07-14' })
+
+    const currentPeriod = await service.get(account, '2026-07-14', '2026-07-14', 90, 0, now)
+    const importedPeriod = await service.get(account, '2026-07-13', '2026-07-13', 90, 0, now)
+
+    expect(currentPeriod.hourBankMinutes).toBe(60)
+    expect(importedPeriod.hourBankMinutes).toBe(60)
+    expect(findWorkLogsUntil).toHaveBeenCalledWith(
+      account.id, new Date('2026-07-12T03:00:00.000Z'), new Date('2026-07-15T03:00:00.000Z'),
+    )
   })
 })

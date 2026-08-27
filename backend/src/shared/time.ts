@@ -2,7 +2,10 @@ import type { WorkDay, WorkLog } from '../domain/types.js'
 
 const MINUTE_MS = 60_000
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const BRAZILIAN_DATE_TIME_PATTERN = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/
 const WEEK_DAYS: WorkDay[] = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+
+export const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo'
 
 function partsAt(instant: Date, timeZone: string): Record<string, number> {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -26,6 +29,32 @@ export function localDateStart(date: string, timeZone: string): Date {
   const naiveUtc = Date.UTC(year, month - 1, day)
   let result = new Date(naiveUtc - offsetAt(new Date(naiveUtc), timeZone))
   result = new Date(naiveUtc - offsetAt(result, timeZone))
+  return result
+}
+
+export function brazilianDateTimeToInstant(value: string, timeZone: string): Date {
+  const match = BRAZILIAN_DATE_TIME_PATTERN.exec(value)
+  if (!match) throw new Error('must follow format DD/MM/YYYY HH:mm')
+
+  const [, dayText, monthText, yearText, hourText, minuteText] = match
+  const day = Number(dayText)
+  const month = Number(monthText)
+  const year = Number(yearText)
+  const hour = Number(hourText)
+  const minute = Number(minuteText)
+  const calendarDate = new Date(Date.UTC(year, month - 1, day))
+  if (
+    calendarDate.getUTCFullYear() !== year || calendarDate.getUTCMonth() !== month - 1 || calendarDate.getUTCDate() !== day
+    || hour > 23 || minute > 59
+  ) throw new Error('must be a valid date and time')
+
+  const naiveUtc = Date.UTC(year, month - 1, day, hour, minute)
+  let result = new Date(naiveUtc - offsetAt(new Date(naiveUtc), timeZone))
+  result = new Date(naiveUtc - offsetAt(result, timeZone))
+  const parts = partsAt(result, timeZone)
+  if (
+    parts.year !== year || parts.month !== month || parts.day !== day || parts.hour !== hour || parts.minute !== minute
+  ) throw new Error('must be a valid date and time in the configured timezone')
   return result
 }
 

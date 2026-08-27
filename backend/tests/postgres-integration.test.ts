@@ -153,8 +153,8 @@ integration('Fastify with PostgreSQL', () => {
     expect(created.statusCode).toBe(201)
     const boundary = '----controle-horas-smoke-boundary'
     const csv = `email,entry_at,exit_at,close_reason\n`
-      + `${childEmail},2026-01-05T08:00:00-03:00,2026-01-05T17:00:00-03:00,EXIT\n`
-      + `${childEmail},2026-01-05T08:00:00-03:00,2026-01-05T17:00:00-03:00,EXIT\n`
+      + `${childEmail},05/01/2026 08:00,05/01/2026 17:00,EXIT\n`
+      + `${childEmail},05/01/2026 08:00,05/01/2026 17:00,EXIT\n`
     const multipart = Buffer.from(
       `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="smoke.csv"\r\n`
       + `Content-Type: text/csv\r\n\r\n${csv}\r\n--${boundary}--\r\n`,

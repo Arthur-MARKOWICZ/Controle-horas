@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatSignedDuration,
+  formatInstantTime,
   formatWorkload,
   getCurrentMonthRange,
 } from './formatTime'
@@ -18,5 +19,9 @@ describe('formatTime', () => {
       startDate: '2026-07-01',
       endDate: '2026-07-31',
     })
+  })
+
+  it('formats imported instants in the Sao Paulo timezone', () => {
+    expect(formatInstantTime('2026-07-14T16:00:00.000Z')).toBe('13:00')
   })
 })

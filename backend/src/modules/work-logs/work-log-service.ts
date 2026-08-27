@@ -58,12 +58,15 @@ export class WorkLogService {
         logs, date, user.dailyWorkloadMinutes, user.workDays, user.lunchEnabled, user.lunchDurationMinutes,
       )
       const first = await this.repositories.findFirstWorkLog(user.id)
-      const fromDate = this.workTime.resolvedStartDate(user.workStartDate, first)
-      if (fromDate) {
+      const absenceStart = this.workTime.resolvedStartDate(user.workStartDate, first)
+      const hourBankStart = this.workTime.hourBankStartDate(user.workStartDate, first)
+      if (hourBankStart) {
         const allLogs = await this.repositories.findWorkLogsUntil(
-          user.id, localDateStart(addDays(fromDate, -1), this.timeZone), end,
+          user.id, localDateStart(addDays(hourBankStart, -1), this.timeZone), end,
         )
-        hourBankMinutes = this.workTime.hourBank(allLogs, user.dailyWorkloadMinutes, user.workDays, fromDate, date)
+        hourBankMinutes = this.workTime.hourBank(
+          allLogs, user.dailyWorkloadMinutes, user.workDays, hourBankStart, date, absenceStart || hourBankStart,
+        )
       }
     }
     return {

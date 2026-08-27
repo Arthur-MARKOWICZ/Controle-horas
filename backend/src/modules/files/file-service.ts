@@ -3,6 +3,7 @@ import type { Readable } from 'node:stream'
 import type { CloseReason, User } from '../../domain/types.js'
 import { CLOSE_REASONS } from '../../domain/types.js'
 import { ForbiddenError, NotFoundError, ValidationError } from '../../shared/errors.js'
+import { brazilianDateTimeToInstant } from '../../shared/time.js'
 import type { HistoryService } from '../history/history-service.js'
 import type { UserService } from '../users/user-service.js'
 
@@ -11,8 +12,13 @@ interface ImportError { row: number; message: string }
 
 const TEMPLATE_ROWS = [
   ['email', 'entry_at', 'exit_at', 'close_reason'],
-  ['user@empresa.com', '2026-07-14T08:30:00-03:00', '2026-07-14T12:00:00-03:00', 'PAUSE'],
-  ['user@empresa.com', '2026-07-14T13:00:00-03:00', '2026-07-14T17:20:00-03:00', 'EXIT'],
+  ['user@empresa.com', '14/07/2026 08:30', '14/07/2026 12:00', 'PAUSE'],
+  ['user@empresa.com', '14/07/2026 13:00', '14/07/2026 17:20', 'EXIT'],
+]
+
+const XLSX_TEMPLATE_TIMES = [
+  [new Date(Date.UTC(2026, 6, 14, 8, 30)), new Date(Date.UTC(2026, 6, 14, 12, 0))],
+  [new Date(Date.UTC(2026, 6, 14, 13, 0)), new Date(Date.UTC(2026, 6, 14, 17, 20))],
 ]
 
 function duration(totalMinutes: number, signed = false): string {
@@ -37,6 +43,17 @@ function localInstant(value: string | null, timeZone: string): string {
   }).format(new Date(value))
 }
 
+function xlsxDateTimeValue(value: unknown): unknown {
+  if (!(value instanceof Date)) return value
+  if (value.getUTCSeconds() !== 0 || value.getUTCMilliseconds() !== 0) return ''
+  const day = value.getUTCDate().toString().padStart(2, '0')
+  const month = (value.getUTCMonth() + 1).toString().padStart(2, '0')
+  const year = value.getUTCFullYear().toString().padStart(4, '0')
+  const hour = value.getUTCHours().toString().padStart(2, '0')
+  const minute = value.getUTCMinutes().toString().padStart(2, '0')
+  return `${day}/${month}/${year} ${hour}:${minute}`
+}
+
 export class FileService {
   constructor(
     private readonly repositories: Repositories,
@@ -53,7 +70,15 @@ export class FileService {
     const ExcelJS = (await import('exceljs')).default
     const workbook = new ExcelJS.Workbook()
     const sheet = workbook.addWorksheet('work_logs')
-    TEMPLATE_ROWS.forEach((row) => sheet.addRow(row))
+    sheet.addRow(TEMPLATE_ROWS[0])
+    TEMPLATE_ROWS.slice(1).forEach((row, index) => {
+      const [entryAt, exitAt] = XLSX_TEMPLATE_TIMES[index]!
+      sheet.addRow([row[0], entryAt, exitAt, row[3]])
+    })
+    for (let row = 2; row <= 3; row++) {
+      sheet.getCell(row, 2).numFmt = 'dd/mm/yyyy hh:mm'
+      sheet.getCell(row, 3).numFmt = 'dd/mm/yyyy hh:mm'
+    }
     sheet.columns.forEach((column) => { column.width = 32 })
     return Buffer.from(await workbook.xlsx.writeBuffer())
   }
@@ -171,8 +196,8 @@ export class FileService {
       const row = sheet.getRow(number)
       if (!row.hasValues) continue
       rows.push({
-        rowNumber: number, email: row.getCell(1).text.trim(), entryAt: row.getCell(2).value,
-        exitAt: row.getCell(3).value, closeReason: row.getCell(4).text.trim(),
+        rowNumber: number, email: row.getCell(1).text.trim(), entryAt: xlsxDateTimeValue(row.getCell(2).value),
+        exitAt: xlsxDateTimeValue(row.getCell(3).value), closeReason: row.getCell(4).text.trim(),
       })
     }
     return rows
@@ -186,8 +211,11 @@ export class FileService {
   }
 
   private parseInstant(value: unknown, field: string): Date {
-    const date = value instanceof Date ? value : new Date(String(value || '').trim())
-    if (Number.isNaN(date.getTime())) throw new ValidationError(`${field} must be a valid ISO-8601 instant`)
-    return date
+    try {
+      return brazilianDateTimeToInstant(String(value || '').trim(), this.timeZone)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'must be a valid date and time'
+      throw new ValidationError(`${field} ${message}`)
+    }
   }
 }

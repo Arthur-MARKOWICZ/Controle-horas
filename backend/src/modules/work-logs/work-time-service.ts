@@ -33,6 +33,7 @@ export class WorkTimeService {
 
   hourBank(
     logs: readonly WorkLog[], dailyMinutes: number, workDays: readonly WorkDay[], fromDate: string, untilDate: string,
+    absenceStartDate = fromDate,
   ): number {
     const grouped = groupLogsByEntryDate(logs, this.timeZone)
     const worked = closedMinutesByDate(logs, this.timeZone)
@@ -44,7 +45,7 @@ export class WorkTimeService {
       const dayWorked = worked.get(date) || 0
       if (dayLogs.length === 0) {
         if (dayWorked > 0) total += dayWorked - workload
-        else if (pastDay && workload > 0) total -= workload
+        else if (pastDay && date >= absenceStartDate && workload > 0) total -= workload
       } else if (!isDayComplete(dayLogs)) {
         if (pastDay) total += dayWorked - workload
       } else {
@@ -62,5 +63,12 @@ export class WorkTimeService {
 
   resolvedStartDate(configured: string | null, firstLog: WorkLog | null): string | null {
     return configured || (firstLog ? localDateOf(firstLog.entryAt, this.timeZone) : null)
+  }
+
+  hourBankStartDate(configured: string | null, firstLog: WorkLog | null): string | null {
+    const firstLogDate = firstLog ? localDateOf(firstLog.entryAt, this.timeZone) : null
+    if (!configured) return firstLogDate
+    if (!firstLogDate) return configured
+    return firstLogDate < configured ? firstLogDate : configured
   }
 }

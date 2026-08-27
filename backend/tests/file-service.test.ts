@@ -4,6 +4,7 @@ import type { Repositories } from '../src/database/repositories.js'
 import type { User } from '../src/domain/types.js'
 import { UserService } from '../src/modules/users/user-service.js'
 import { HistoryService } from '../src/modules/history/history-service.js'
+import { localDateOf } from '../src/shared/time.js'
 
 const user: User = {
   id: 'user', name: 'Ana', email: 'ana@example.com', passwordHash: 'hash', role: 'ADMIN', managerId: null, managerName: null,
@@ -22,18 +23,51 @@ function service(methods: Record<string, unknown> = {}) {
 describe('FileService', () => {
   it('generates CSV and XLSX templates', async () => {
     const files = service().files
-    expect(files.csvTemplate().toString()).toContain('email,entry_at,exit_at,close_reason')
-    expect((await files.xlsxTemplate()).subarray(0, 2)).toEqual(Buffer.from('PK'))
+    expect(files.csvTemplate().toString()).toContain('user@empresa.com,14/07/2026 08:30,14/07/2026 12:00,PAUSE')
+    const template = await files.xlsxTemplate()
+    expect(template.subarray(0, 2)).toEqual(Buffer.from('PK'))
+
+    const { files: importer, repositories } = service()
+    await expect(importer.importFile(user, 'records.xlsx', template)).resolves.toMatchObject({ importedCount: 2, errorCount: 0 })
+    expect(repositories.importClosedWorkLogs).toHaveBeenCalledWith([
+      expect.objectContaining({ entryAt: new Date('2026-07-14T11:30:00.000Z'), exitAt: new Date('2026-07-14T15:00:00.000Z') }),
+      expect.objectContaining({ entryAt: new Date('2026-07-14T16:00:00.000Z'), exitAt: new Date('2026-07-14T20:20:00.000Z') }),
+    ])
   })
 
   it('imports valid CSV rows and returns per-row errors without discarding valid data', async () => {
     const importClosedWorkLogs = vi.fn().mockResolvedValue(new Map([[3, 'Overlapping work log already exists for this period']]))
     const { files } = service({ findUserByEmail: vi.fn().mockResolvedValueOnce(user).mockResolvedValueOnce(null), importClosedWorkLogs })
     const result = await files.importFile(user, 'records.csv', Buffer.from(
-      'email,entry_at,exit_at,close_reason\nana@example.com,2026-07-13T08:00:00-03:00,2026-07-13T17:00:00-03:00,EXIT\nmissing@example.com,2026-07-14T08:00:00-03:00,2026-07-14T17:00:00-03:00,EXIT\n',
+      'email,entry_at,exit_at,close_reason\nana@example.com,13/07/2026 08:00,13/07/2026 17:00,EXIT\nmissing@example.com,14/07/2026 08:00,14/07/2026 17:00,EXIT\n',
     ))
     expect(result).toEqual(expect.objectContaining({ importedCount: 0, errorCount: 2 }))
     expect(importClosedWorkLogs).toHaveBeenCalledWith([expect.objectContaining({ userId: user.id, closeReason: 'EXIT' })])
+  })
+
+  it('imports Brazilian datetimes as Sao Paulo instants, including shortly after midnight', async () => {
+    const { files, repositories } = service()
+    await files.importFile(user, 'records.csv', Buffer.from(
+      'email,entry_at,exit_at,close_reason\nana@example.com,14/07/2026 00:30,14/07/2026 01:30,EXIT\n',
+    ))
+    const [row] = (repositories.importClosedWorkLogs as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+    expect(row.entryAt.toISOString()).toBe('2026-07-14T03:30:00.000Z')
+    expect(row.exitAt.toISOString()).toBe('2026-07-14T04:30:00.000Z')
+    expect(localDateOf(row.entryAt, 'America/Sao_Paulo')).toBe('2026-07-14')
+  })
+
+  it.each([
+    ['2026-07-14T13:00:00-03:00', '14/07/2026 17:00', 'must follow format DD/MM/YYYY HH:mm'],
+    ['31/02/2026 13:00', '14/07/2026 17:00', 'must be a valid date and time'],
+    ['14/07/2026 24:00', '14/07/2026 17:00', 'must be a valid date and time'],
+    ['14/07/2026 13:00:30', '14/07/2026 17:00', 'must follow format DD/MM/YYYY HH:mm'],
+  ])('rejects invalid Brazilian datetime %s', async (entryAt, exitAt, message) => {
+    const { files } = service()
+    const result = await files.importFile(user, 'records.csv', Buffer.from(
+      `email,entry_at,exit_at,close_reason\nana@example.com,${entryAt},${exitAt},EXIT\n`,
+    )) as { importedCount: number; errorCount: number; errors: Array<{ message: string }> }
+    expect(result).toMatchObject({ importedCount: 0, errorCount: 1 })
+    expect(result.errors[0]?.message).toContain(message)
   })
 
   it.each([

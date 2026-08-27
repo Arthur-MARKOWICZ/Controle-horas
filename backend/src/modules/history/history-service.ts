@@ -25,19 +25,20 @@ export class HistoryService {
     const rangeEnd = localDateStart(addDays(endDate, 1), this.timeZone)
     const periodLogs = await this.repositories.findWorkLogsOverlappingRange(user.id, rangeStart, rangeEnd)
     const first = await this.repositories.findFirstWorkLog(user.id)
-    const resolvedStart = this.workTime.resolvedStartDate(user.workStartDate, first)
+    const absenceStart = this.workTime.resolvedStartDate(user.workStartDate, first)
+    const hourBankStart = this.workTime.hourBankStartDate(user.workStartDate, first)
     const today = localDateOf(now, this.timeZone)
-    const days = this.buildDays(user, startDate, endDate, today, resolvedStart, periodLogs, now)
+    const days = this.buildDays(user, startDate, endDate, today, absenceStart, periodLogs, now)
     const totalWorkedMinutes = days.reduce((total, day) => total + day.workedMinutes, 0)
     const totalBalanceMinutes = days.reduce((total, day) => total + day.balanceMinutes, 0)
     let hourBankMinutes = 0
-    const until = endDate < today ? endDate : today
-    if (resolvedStart && resolvedStart <= until) {
-      const from = startDate > resolvedStart ? startDate : resolvedStart
+    if (hourBankStart && hourBankStart <= today) {
       const allLogs = await this.repositories.findWorkLogsUntil(
-        user.id, localDateStart(addDays(from, -1), this.timeZone), localDateStart(addDays(until, 1), this.timeZone),
+        user.id, localDateStart(addDays(hourBankStart, -1), this.timeZone), localDateStart(addDays(today, 1), this.timeZone),
       )
-      hourBankMinutes = this.workTime.hourBank(allLogs, user.dailyWorkloadMinutes, user.workDays, from, until)
+      hourBankMinutes = this.workTime.hourBank(
+        allLogs, user.dailyWorkloadMinutes, user.workDays, hourBankStart, today, absenceStart || hourBankStart,
+      )
     }
     return {
       startDate, endDate, totalWorkedMinutes, totalBalanceMinutes, hourBankMinutes,

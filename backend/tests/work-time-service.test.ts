@@ -75,6 +75,13 @@ describe('WorkTimeService characterization', () => {
     expect(service.hourBank(logs, 530, ['MONDAY', 'TUESDAY'], '2026-07-13', '2026-07-14')).toBe(20)
   })
   it('debits a past work day without logs', () => expect(service.hourBank([], 530, ['MONDAY'], '2026-07-13', '2026-07-14')).toBe(-530))
+  it('does not debit days before the configured absence start', () => {
+    expect(service.hourBank([], 480, ['MONDAY', 'TUESDAY'], '2026-07-13', '2026-07-15', '2026-07-15')).toBe(0)
+  })
+  it('counts imported work before the configured absence start against the daily workload', () => {
+    const imported = [log('2026-07-13T11:00:00Z', '2026-07-13T20:00:00Z')]
+    expect(service.hourBank(imported, 480, ['MONDAY'], '2026-07-13', '2026-07-14', '2026-07-14')).toBe(60)
+  })
   it('does not debit today without logs', () => expect(service.hourBank([], 530, ['TUESDAY'], '2026-07-14', '2026-07-14')).toBe(0))
   it('adds non-work-day effort', () => {
     const logs = [log('2026-07-18T11:00:00Z', '2026-07-18T13:00:00Z')]

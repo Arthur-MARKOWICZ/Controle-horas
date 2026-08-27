@@ -1,3 +1,5 @@
+import { SAO_PAULO_TIME_ZONE } from './shared/time.js'
+
 export interface AppConfig {
   databaseUrl: string
   databasePoolMax: number
@@ -56,12 +58,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     throw new Error('JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different')
   }
 
-  const timeZone = environment.TIME_ZONE?.trim() || 'America/Sao_Paulo'
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date())
-  } catch {
-    throw new Error('TIME_ZONE must be a valid IANA timezone')
-  }
+  const timeZone = environment.TIME_ZONE?.trim() || SAO_PAULO_TIME_ZONE
+  if (timeZone !== SAO_PAULO_TIME_ZONE) throw new Error(`TIME_ZONE must be ${SAO_PAULO_TIME_ZONE}`)
 
   return {
     databaseUrl: required(environment, 'DATABASE_URL'),

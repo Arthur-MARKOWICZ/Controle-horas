@@ -16,4 +16,5 @@ describe('configuration', () => {
   it('fails fast for missing database URL', () => expect(() => loadConfig({ ...environment, DATABASE_URL: '' })).toThrow('DATABASE_URL is required'))
   it('requires different JWT secrets', () => expect(() => loadConfig({ ...environment, JWT_REFRESH_SECRET: 'a'.repeat(32) })).toThrow('must be different'))
   it('validates the connection pool limit', () => expect(() => loadConfig({ ...environment, DB_POOL_MAX: '50' })).toThrow('DB_POOL_MAX'))
+  it('requires the America/Sao_Paulo timezone', () => expect(() => loadConfig({ ...environment, TIME_ZONE: 'UTC' })).toThrow('TIME_ZONE must be America/Sao_Paulo'))
 })
