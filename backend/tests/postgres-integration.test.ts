@@ -66,6 +66,7 @@ integration('Fastify with PostgreSQL', () => {
       adoptedPool = new pg.Pool({ connectionString: adoptedUrl.toString() })
       await adoptedPool.query('DROP TABLE auth_refresh_tokens')
       await adoptedPool.query('DROP TABLE password_reset_tokens')
+      await adoptedPool.query('ALTER TABLE users DROP COLUMN hour_bank_minutes')
       await adoptedPool.query('DROP TABLE app_schema_migrations')
       await adoptedPool.query(`
         CREATE TABLE flyway_schema_history (
