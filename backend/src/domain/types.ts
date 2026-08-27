@@ -24,8 +24,15 @@ export interface User {
   workDays: WorkDay[]
   workStartDate: string | null
   hourBankMinutes: number
+  workedDayTotals: WorkedDayTotals
   createdAt: Date
   updatedAt: Date
+}
+
+export interface WorkedDayTotals {
+  total: number
+  inSchedule: number
+  outsideSchedule: number
 }
 
 export interface WorkLog {

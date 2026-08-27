@@ -46,6 +46,7 @@ describe('HistoryPage', () => {
         totalWorkedMinutes: 530,
         totalBalanceMinutes: 0,
         hourBankMinutes: 0,
+        workedDayTotals: { total: 1, inSchedule: 1, outsideSchedule: 0 },
         days: [
           {
             date: '2026-07-14',
@@ -74,6 +75,7 @@ describe('HistoryPage', () => {
     expect(screen.getByLabelText('Data inicial')).toHaveValue(monthRange.startDate)
     expect(screen.getByLabelText('Data final')).toHaveValue(monthRange.endDate)
     expect(screen.getByText('14/07/2026')).toBeInTheDocument()
+    expect(screen.getByText('1 na jornada · 0 fora da jornada')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Exportar Excel' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Exportar PDF' })).toBeInTheDocument()
   })
@@ -88,6 +90,7 @@ describe('HistoryPage', () => {
         totalWorkedMinutes: 0,
         totalBalanceMinutes: 0,
         hourBankMinutes: 0,
+        workedDayTotals: { total: 0, inSchedule: 0, outsideSchedule: 0 },
         days: [],
       },
       startDate: monthRange.startDate,
@@ -123,6 +126,7 @@ describe('HistoryPage', () => {
         totalWorkedMinutes: 0,
         totalBalanceMinutes: 0,
         hourBankMinutes: 0,
+        workedDayTotals: { total: 0, inSchedule: 0, outsideSchedule: 0 },
         days: [],
         pagination: { limit: 10, offset: 0, total: 20 },
       },

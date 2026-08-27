@@ -1,7 +1,7 @@
 import type { Repositories } from '../../database/repositories.js'
 import type { DashboardResponse, HourBankRecalculationResponse } from '../../domain/contracts.js'
 import { workLogResponse } from '../../domain/contracts.js'
-import type { CloseReason, User } from '../../domain/types.js'
+import type { CloseReason, User, WorkedDayTotals } from '../../domain/types.js'
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors.js'
 import { addDays, effectiveWorkload, localDateOf, localDateStart, pausedMinutes } from '../../shared/time.js'
 import type { WorkTimeService } from './work-time-service.js'
@@ -79,6 +79,10 @@ export class WorkLogService {
     const end = localDateStart(addDays(date, 1), this.timeZone)
     const hourBankMinutes = await this.calculateHourBank(user, date, end)
     return this.repositories.replaceHourBankMinutes(user.id, hourBankMinutes)
+  }
+
+  async recalculateWorkedDays(user: User): Promise<WorkedDayTotals> {
+    return this.repositories.recalculateWorkedDayTotals(user.id)
   }
 
   private async calculateHourBank(user: User, untilDate: string, end: Date): Promise<number> {

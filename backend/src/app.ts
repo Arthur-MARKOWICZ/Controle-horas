@@ -300,6 +300,11 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   }, async (request) => ok('Hour bank recalculated successfully', await workLogs.recalculateHourBank(
     await users.requireAccess(actor(request), request.params.userId),
   )))
+  app.post<{ Params: { userId: string } }>('/api/users/:userId/worked-days/recalculate', {
+    preHandler: requireHourBankRecalculationAccess, schema: { params: idParams() },
+  }, async (request) => ok('Worked day totals recalculated successfully', await workLogs.recalculateWorkedDays(
+    await users.requireAccess(actor(request), request.params.userId),
+  )))
   app.post<{ Params: { userId: string }; Body: AdministrativeWorkLogBody }>('/api/users/:userId/work-logs', {
     preHandler: requireAdminWorkLogAccess, schema: { params: idParams(), body: administrativeWorkLogSchema() },
   }, async (request) => ok('Work log created successfully', await workLogs.createAdministrative(

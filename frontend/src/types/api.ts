@@ -20,9 +20,10 @@ export interface HistoryDay {
   date: string; firstEntryAt: string | null; lastExitAt: string | null; workedMinutes: number
   pausedMinutes: number; balanceMinutes: number; isComplete: boolean; workLogs: WorkLog[]
 }
+export interface WorkedDayTotals { total: number; inSchedule: number; outsideSchedule: number }
 export interface HistoryData {
   startDate: string; endDate: string; totalWorkedMinutes: number; totalBalanceMinutes: number
-  hourBankMinutes: number; days: HistoryDay[]; pagination?: { limit: number; offset: number; total: number }
+  hourBankMinutes: number; workedDayTotals: WorkedDayTotals; days: HistoryDay[]; pagination?: { limit: number; offset: number; total: number }
 }
 export interface AdministrativeWorkLogPayload { entryAt: string; exitAt: string }
 export interface HourBankRecalculation { previousHourBankMinutes: number; hourBankMinutes: number }

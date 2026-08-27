@@ -136,8 +136,15 @@ function HistoryPage() {
                 <p className={styles.summaryValue}>{formatSignedDuration(history.totalBalanceMinutes)}</p>
               </article>
               <article className={styles.summaryCard}>
-                <h2>Banco de horas</h2>
+                <h2>Banco acumulado</h2>
                 <p className={styles.summaryValue}>{formatSignedDuration(history.hourBankMinutes)}</p>
+              </article>
+              <article className={styles.summaryCard}>
+                <h2>Dias trabalhados</h2>
+                <p className={styles.summaryValue}>{history.workedDayTotals.total}</p>
+                <p className={styles.summaryDetail}>
+                  {history.workedDayTotals.inSchedule} na jornada · {history.workedDayTotals.outsideSchedule} fora da jornada
+                </p>
               </article>
             </section>
 

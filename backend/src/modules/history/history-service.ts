@@ -41,7 +41,7 @@ export class HistoryService {
       )
     }
     return {
-      startDate, endDate, totalWorkedMinutes, totalBalanceMinutes, hourBankMinutes,
+      startDate, endDate, totalWorkedMinutes, totalBalanceMinutes, hourBankMinutes, workedDayTotals: user.workedDayTotals,
       days: days.slice(offset, offset + limit), pagination: { limit, offset, total: days.length },
     }
   }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Pool, PoolClient, QueryResultRow } from 'pg'
-import type { CloseReason, User, UserRole, WorkDay, WorkLog } from '../domain/types.js'
+import type { CloseReason, User, UserRole, WorkDay, WorkedDayTotals, WorkLog } from '../domain/types.js'
 import { ConflictError, RefreshTokenReuseError, UnauthorizedError } from '../shared/errors.js'
 import { normalizeWorkDays } from '../domain/types.js'
 
@@ -11,6 +11,7 @@ interface UserRow extends QueryResultRow {
   manager_id: string | null; manager_name: string | null; created_by_id: string | null
   daily_workload_minutes: number; standard_entry_time: string | null; standard_exit_time: string | null
   lunch_enabled: boolean; lunch_duration_minutes: number; work_days: string | null; work_start_date: string | null; hour_bank_minutes: number
+  total_worked_days: number; scheduled_worked_days: number; outside_schedule_worked_days: number
   created_at: Date; updated_at: Date
 }
 
@@ -23,7 +24,45 @@ const USER_COLUMNS = `
   u.id, u.name, u.email, u.password_hash, u.role, u.manager_id,
   manager.name AS manager_name, u.created_by_id, u.daily_workload_minutes,
   u.standard_entry_time, u.standard_exit_time, u.lunch_enabled,
-  u.lunch_duration_minutes, u.work_days, u.work_start_date, u.hour_bank_minutes, u.created_at, u.updated_at`
+  u.lunch_duration_minutes, u.work_days, u.work_start_date, u.hour_bank_minutes,
+  u.total_worked_days, u.scheduled_worked_days, u.outside_schedule_worked_days, u.created_at, u.updated_at`
+
+const WORKED_DAY_TOTALS_SQL = `
+  WITH worked_dates AS (
+    SELECT DISTINCT day.date::DATE AS worked_date
+    FROM work_logs log
+    CROSS JOIN LATERAL generate_series(
+      (log.entry_at AT TIME ZONE 'America/Sao_Paulo')::DATE,
+      ((log.exit_at - INTERVAL '1 microsecond') AT TIME ZONE 'America/Sao_Paulo')::DATE,
+      INTERVAL '1 day'
+    ) AS day(date)
+    WHERE log.user_id=$1 AND log.exit_at IS NOT NULL AND log.exit_at > log.entry_at
+  ), classified AS (
+    SELECT worked_date,
+      CASE EXTRACT(ISODOW FROM worked_date)::INTEGER
+        WHEN 1 THEN 'MONDAY' WHEN 2 THEN 'TUESDAY' WHEN 3 THEN 'WEDNESDAY'
+        WHEN 4 THEN 'THURSDAY' WHEN 5 THEN 'FRIDAY' WHEN 6 THEN 'SATURDAY'
+        ELSE 'SUNDAY'
+      END = ANY(string_to_array(COALESCE(schedule.work_days, ''), ',')) AS in_schedule
+    FROM worked_dates
+    LEFT JOIN LATERAL (
+      SELECT work_days FROM user_work_schedule_versions
+      WHERE user_id=$1 AND effective_from <= worked_dates.worked_date
+      ORDER BY effective_from DESC LIMIT 1
+    ) schedule ON TRUE
+  ), totals AS (
+    SELECT COUNT(*)::INTEGER AS total,
+      COUNT(*) FILTER (WHERE in_schedule)::INTEGER AS in_schedule,
+      COUNT(*) FILTER (WHERE NOT in_schedule)::INTEGER AS outside_schedule
+    FROM classified
+  )
+  UPDATE users SET
+    total_worked_days=(SELECT total FROM totals),
+    scheduled_worked_days=(SELECT in_schedule FROM totals),
+    outside_schedule_worked_days=(SELECT outside_schedule FROM totals),
+    updated_at=NOW()
+  WHERE id=$1
+  RETURNING total_worked_days,scheduled_worked_days,outside_schedule_worked_days`
 
 function mapUser(row: UserRow): User {
   return {
@@ -32,7 +71,9 @@ function mapUser(row: UserRow): User {
     dailyWorkloadMinutes: row.daily_workload_minutes, standardEntryTime: row.standard_entry_time,
     standardExitTime: row.standard_exit_time, lunchEnabled: row.lunch_enabled,
     lunchDurationMinutes: row.lunch_duration_minutes, workDays: normalizeWorkDays(row.work_days),
-    workStartDate: row.work_start_date, hourBankMinutes: row.hour_bank_minutes, createdAt: row.created_at, updatedAt: row.updated_at,
+    workStartDate: row.work_start_date, hourBankMinutes: row.hour_bank_minutes,
+    workedDayTotals: { total: row.total_worked_days, inSchedule: row.scheduled_worked_days, outsideSchedule: row.outside_schedule_worked_days },
+    createdAt: row.created_at, updatedAt: row.updated_at,
   }
 }
 
@@ -86,8 +127,10 @@ export class Repositories {
 
   async createUser(input: NewUser): Promise<User> {
     const id = randomUUID()
+    const client = await this.pool.connect()
     try {
-      await this.pool.query(
+      await client.query('BEGIN')
+      await client.query(
         `INSERT INTO users (
            id, name, email, password_hash, role, manager_id, created_by_id, work_start_date,
            daily_workload_minutes, standard_entry_time, standard_exit_time,
@@ -97,16 +140,25 @@ export class Repositories {
           input.workStartDate, input.dailyWorkloadMinutes, input.standardEntryTime, input.standardExitTime,
           input.lunchEnabled, input.lunchDurationMinutes, input.workDays.join(',')],
       )
+      await client.query(
+        `INSERT INTO user_work_schedule_versions(user_id,effective_from,work_days)
+         VALUES ($1,DATE '0001-01-01',$2)`, [id, input.workDays.join(',')],
+      )
+      await client.query('COMMIT')
     } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined)
       if ((error as { code?: string }).code === '23505') throw new ConflictError('Email is already registered')
       throw error
-    }
+    } finally { client.release() }
     return (await this.findUserById(id))!
   }
 
   async saveUser(user: User): Promise<User> {
+    const client = await this.pool.connect()
     try {
-      await this.pool.query(
+      await client.query('BEGIN')
+      const current = await client.query<{ work_days: string | null }>('SELECT work_days FROM users WHERE id=$1 FOR UPDATE', [user.id])
+      await client.query(
         `UPDATE users SET name=$2, email=$3, role=$4, manager_id=$5, work_start_date=$6,
          daily_workload_minutes=$7, standard_entry_time=$8, standard_exit_time=$9,
          lunch_enabled=$10, lunch_duration_minutes=$11, work_days=$12, updated_at=NOW()
@@ -115,10 +167,20 @@ export class Repositories {
         user.standardEntryTime, user.standardExitTime, user.lunchEnabled, user.lunchDurationMinutes,
         user.workDays.join(',') || null],
       )
+      if ((current.rows[0]?.work_days || '') !== user.workDays.join(',')) {
+        await client.query(
+          `INSERT INTO user_work_schedule_versions(user_id,effective_from,work_days)
+           VALUES ($1,(NOW() AT TIME ZONE 'America/Sao_Paulo')::DATE + 1,$2)
+           ON CONFLICT (user_id,effective_from) DO UPDATE SET work_days=EXCLUDED.work_days`,
+          [user.id, user.workDays.join(',')],
+        )
+      }
+      await client.query('COMMIT')
     } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined)
       if ((error as { code?: string }).code === '23505') throw new ConflictError('Email is already registered')
       throw error
-    }
+    } finally { client.release() }
     return (await this.findUserById(user.id))!
   }
 
@@ -181,13 +243,23 @@ export class Repositories {
   }
 
   async closeOpenWorkLog(userId: string, exitAt: Date, reason: CloseReason): Promise<boolean> {
-    const result = await this.pool.query(
-      `WITH target AS (
-         SELECT id FROM work_logs WHERE user_id=$1 AND exit_at IS NULL ORDER BY entry_at DESC LIMIT 1 FOR UPDATE
-       ) UPDATE work_logs SET exit_at=$2, close_reason=$3, updated_at=NOW()
-       WHERE id IN (SELECT id FROM target)`, [userId, exitAt, reason],
-    )
-    return (result.rowCount || 0) > 0
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [userId])
+      const result = await client.query(
+        `WITH target AS (
+           SELECT id FROM work_logs WHERE user_id=$1 AND exit_at IS NULL ORDER BY entry_at DESC LIMIT 1 FOR UPDATE
+         ) UPDATE work_logs SET exit_at=$2, close_reason=$3, updated_at=NOW()
+         WHERE id IN (SELECT id FROM target)`, [userId, exitAt, reason],
+      )
+      if (result.rowCount) await this.recalculateWorkedDayTotalsInTransaction(userId, client)
+      await client.query('COMMIT')
+      return (result.rowCount || 0) > 0
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined)
+      throw error
+    } finally { client.release() }
   }
 
   async createClosedWorkLog(userId: string, entryAt: Date, exitAt: Date): Promise<WorkLog> {
@@ -205,6 +277,7 @@ export class Repositories {
         `INSERT INTO work_logs(id,user_id,entry_at,exit_at,close_reason,created_at,updated_at)
          VALUES ($1,$2,$3,$4,'EXIT',NOW(),NOW())`, [id, userId, entryAt, exitAt],
       )
+      await this.recalculateWorkedDayTotalsInTransaction(userId, client)
       await client.query('COMMIT')
       return (await this.findWorkLogById(userId, id))!
     } catch (error) {
@@ -234,6 +307,7 @@ export class Repositories {
          WHERE id=$1 AND user_id=$2
          RETURNING id,user_id,entry_at,exit_at,close_reason,created_at,updated_at`, [id, userId, entryAt, exitAt],
       )
+      await this.recalculateWorkedDayTotalsInTransaction(userId, client)
       await client.query('COMMIT')
       return result.rows[0] ? mapWorkLog(result.rows[0]) : null
     } catch (error) {
@@ -254,6 +328,7 @@ export class Repositories {
       if (!existing.rows[0]) { await client.query('COMMIT'); return false }
       if (!existing.rows[0].exit_at) throw new ConflictError('An open work log cannot be deleted administratively')
       await client.query('DELETE FROM work_logs WHERE id=$1 AND user_id=$2', [id, userId])
+      await this.recalculateWorkedDayTotalsInTransaction(userId, client)
       await client.query('COMMIT')
       return true
     } catch (error) {
@@ -318,6 +393,29 @@ export class Repositories {
     const row = result.rows[0]
     if (!row) throw new Error('User not found while replacing hour bank balance')
     return { previousHourBankMinutes: row.previous_hour_bank_minutes, hourBankMinutes: row.hour_bank_minutes }
+  }
+
+  async recalculateWorkedDayTotals(userId: string): Promise<WorkedDayTotals> {
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [userId])
+      const totals = await this.recalculateWorkedDayTotalsInTransaction(userId, client)
+      await client.query('COMMIT')
+      return totals
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined)
+      throw error
+    } finally { client.release() }
+  }
+
+  private async recalculateWorkedDayTotalsInTransaction(userId: string, client: PoolClient): Promise<WorkedDayTotals> {
+    const result = await client.query<{
+      total_worked_days: number; scheduled_worked_days: number; outside_schedule_worked_days: number
+    }>(WORKED_DAY_TOTALS_SQL, [userId])
+    const row = result.rows[0]
+    if (!row) throw new Error('User not found while recalculating worked day totals')
+    return { total: row.total_worked_days, inSchedule: row.scheduled_worked_days, outsideSchedule: row.outside_schedule_worked_days }
   }
 
   async createRefreshToken(record: RefreshTokenRecord, client: DatabaseClient = this.pool): Promise<void> {
@@ -422,6 +520,7 @@ export class Repositories {
       for (const userId of userIds) {
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [userId])
       }
+      const importedUserIds = new Set<string>()
       for (const row of rows) {
         const savepoint = `import_row_${row.rowNumber}`
         await client.query(`SAVEPOINT ${savepoint}`)
@@ -437,12 +536,14 @@ export class Repositories {
              VALUES ($1,$2,$3,$4,$5,NOW(),NOW())`,
             [randomUUID(), row.userId, row.entryAt, row.exitAt, row.closeReason],
           )
+          importedUserIds.add(row.userId)
           await client.query(`RELEASE SAVEPOINT ${savepoint}`)
         } catch (error) {
           await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`)
           errors.set(row.rowNumber, error instanceof Error ? error.message : 'Unable to import row')
         }
       }
+      for (const userId of importedUserIds) await this.recalculateWorkedDayTotalsInTransaction(userId, client)
       await client.query('COMMIT')
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined)

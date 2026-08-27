@@ -9,7 +9,8 @@ import { localDateOf } from '../src/shared/time.js'
 const user: User = {
   id: 'user', name: 'Ana', email: 'ana@example.com', passwordHash: 'hash', role: 'ADMIN', managerId: null, managerName: null,
   createdById: null, workStartDate: '2026-07-01', dailyWorkloadMinutes: 480, standardEntryTime: '08:00', standardExitTime: '17:00',
-  lunchEnabled: false, lunchDurationMinutes: 0, workDays: ['MONDAY'], hourBankMinutes: 0, createdAt: new Date(), updatedAt: new Date(),
+  lunchEnabled: false, lunchDurationMinutes: 0, workDays: ['MONDAY'], hourBankMinutes: 0,
+  workedDayTotals: { total: 0, inSchedule: 0, outsideSchedule: 0 }, createdAt: new Date(), updatedAt: new Date(),
 }
 const historyData = { startDate: '2026-07-13', endDate: '2026-07-13', totalWorkedMinutes: 480, totalBalanceMinutes: 0, hourBankMinutes: 30,
   pagination: { limit: 90, offset: 0, total: 1 }, days: [{ date: '2026-07-13', firstEntryAt: '2026-07-13T11:00:00.000Z', lastExitAt: '2026-07-13T20:00:00.000Z', workedMinutes: 480, pausedMinutes: 0, balanceMinutes: 0, isComplete: true, workLogs: [] }] }

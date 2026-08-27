@@ -141,6 +141,20 @@ function WorkLogAdjustmentsPage() {
     } finally { setSubmitting(false) }
   }
 
+  const recalculateWorkedDays = async () => {
+    if (!userId) return
+    setSubmitting(true); setError(''); setMessage('')
+    try {
+      const response = await historyService.recalculateUserWorkedDays(userId)
+      if (!response.success || !response.data) throw new Error(response.message || 'Não foi possível recalcular os totais de dias.')
+      setOffset(0)
+      await loadHistory(userId, activeRange, 0)
+      setMessage(`Totais de dias atualizados: ${response.data.total} (${response.data.inSchedule} na jornada e ${response.data.outsideSchedule} fora da jornada).`)
+    } catch (requestError) {
+      setError(await getErrorMessage(requestError, 'Não foi possível recalcular os totais de dias.'))
+    } finally { setSubmitting(false) }
+  }
+
   const logs = history?.days.flatMap((day) => day.workLogs.map((log) => ({ date: day.date, log }))) ?? []
 
   return <MainLayout><main className={styles.page}>
@@ -162,6 +176,12 @@ function WorkLogAdjustmentsPage() {
         <button type="button" disabled={submitting || loadingHistory || !userId} onClick={() => void recalculateHourBank()}>{submitting ? 'Recalculando...' : 'Recalcular banco de horas'}</button>
       </div>
       {(error || message) && <p className={error ? styles.error : styles.success} role={error ? 'alert' : 'status'}>{error || message}</p>}
+    </section>
+    <section className={styles.card} aria-label="Recálculo dos dias trabalhados">
+      <div className={styles.cardHeader}>
+        <div><h2>Dias trabalhados</h2><p className={styles.hint}>Recalcula os totais absolutos de dias dentro e fora da jornada.</p></div>
+        <button type="button" disabled={submitting || loadingHistory || !userId} onClick={() => void recalculateWorkedDays()}>{submitting ? 'Recalculando...' : 'Recalcular totais de dias'}</button>
+      </div>
     </section>
     <section className={styles.card} aria-label="Filtro de período">
       <form className={styles.filterForm} onSubmit={applyFilter}>

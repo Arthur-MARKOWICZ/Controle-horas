@@ -9,6 +9,7 @@ const useUsersMock = vi.fn()
 const getUserHistoryMock = vi.fn()
 const deleteUserWorkLogMock = vi.fn()
 const recalculateUserHourBankMock = vi.fn()
+const recalculateUserWorkedDaysMock = vi.fn()
 const useAuthMock = vi.fn()
 
 vi.mock('../../layouts/MainLayout', () => ({ default: ({ children }: { children: ReactNode }) => children }))
@@ -20,6 +21,7 @@ vi.mock('../../services/historyService', () => ({
   updateUserWorkLog: vi.fn(),
   deleteUserWorkLog: (...args: unknown[]) => deleteUserWorkLogMock(...args),
   recalculateUserHourBank: (...args: unknown[]) => recalculateUserHourBankMock(...args),
+  recalculateUserWorkedDays: (...args: unknown[]) => recalculateUserWorkedDaysMock(...args),
 }))
 
 describe('WorkLogAdjustmentsPage', () => {
@@ -33,12 +35,14 @@ describe('WorkLogAdjustmentsPage', () => {
       success: true,
       data: {
         startDate: '2026-08-01', endDate: '2026-08-31', totalWorkedMinutes: 480, totalBalanceMinutes: 0, hourBankMinutes: 0,
+        workedDayTotals: { total: 1, inSchedule: 1, outsideSchedule: 0 },
         days: [{ date: '2026-08-10', workLogs: [{ id: 'log-1', entryAt: '2026-08-10T11:00:00.000Z', exitAt: '2026-08-10T20:00:00.000Z', closeReason: 'EXIT' }] }],
         pagination: { limit: 10, offset: 0, total: 11 },
       },
     })
     deleteUserWorkLogMock.mockResolvedValue({ success: true, message: 'Work log deleted successfully', data: null })
     recalculateUserHourBankMock.mockResolvedValue({ success: true, message: 'Hour bank recalculated successfully', data: { previousHourBankMinutes: 30, hourBankMinutes: 60 } })
+    recalculateUserWorkedDaysMock.mockResolvedValue({ success: true, message: 'Worked day totals recalculated successfully', data: { total: 7, inSchedule: 6, outsideSchedule: 1 } })
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
   })
 
@@ -51,6 +55,16 @@ describe('WorkLogAdjustmentsPage', () => {
     await waitFor(() => expect(recalculateUserHourBankMock).toHaveBeenCalledWith('user-1'))
     expect(await screen.findByText('Banco de horas recalculado e atualizado: +1h00.')).toBeInTheDocument()
     expect(getUserHistoryMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('recalculates and refreshes the selected worked day totals', async () => {
+    const user = userEvent.setup()
+    render(<WorkLogAdjustmentsPage />)
+
+    await user.click(await screen.findByRole('button', { name: 'Recalcular totais de dias' }))
+
+    await waitFor(() => expect(recalculateUserWorkedDaysMock).toHaveBeenCalledWith('user-1'))
+    expect(await screen.findByText('Totais de dias atualizados: 7 (6 na jornada e 1 fora da jornada).')).toBeInTheDocument()
   })
 
   it('lets managers recalculate but does not show administrative work-log actions', async () => {

@@ -1,4 +1,4 @@
-import type { WorkDay, WorkLog } from './types.js'
+import type { WorkDay, WorkLog, WorkedDayTotals } from './types.js'
 
 export interface WorkLogResponse { id: string; entryAt: string; exitAt: string | null; closeReason: string | null }
 
@@ -19,7 +19,7 @@ export interface HistoryDayResponse {
 
 export interface HistoryResponse {
   startDate: string; endDate: string; totalWorkedMinutes: number; totalBalanceMinutes: number
-  hourBankMinutes: number; days: HistoryDayResponse[]
+  hourBankMinutes: number; workedDayTotals: WorkedDayTotals; days: HistoryDayResponse[]
   pagination: { limit: number; offset: number; total: number }
 }
 

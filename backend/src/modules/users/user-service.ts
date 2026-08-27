@@ -117,7 +117,8 @@ export class UserService {
     const blank = this.schedule({
       id: '', name: '', email, passwordHash: '', role, managerId, managerName: null, createdById: actor.id,
       dailyWorkloadMinutes: 0, standardEntryTime: null, standardExitTime: null, lunchEnabled: false,
-      lunchDurationMinutes: 0, workDays: [], workStartDate: null, hourBankMinutes: 0, createdAt: new Date(), updatedAt: new Date(),
+      lunchDurationMinutes: 0, workDays: [], workStartDate: null, hourBankMinutes: 0,
+      workedDayTotals: { total: 0, inSchedule: 0, outsideSchedule: 0 }, createdAt: new Date(), updatedAt: new Date(),
     }, input)
     const user = await this.repositories.createUser({
       name: input.name.trim(), email, passwordHash: await bcrypt.hash(input.password, this.bcryptRounds), role,

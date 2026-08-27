@@ -17,6 +17,7 @@ function user(overrides: Partial<User> = {}): User {
     dailyWorkloadMinutes: 480, standardEntryTime: '08:00', standardExitTime: '17:00', lunchEnabled: true,
     lunchDurationMinutes: 60, workDays: ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY'], hourBankMinutes: 0,
     createdAt: now, updatedAt: now, ...overrides,
+    workedDayTotals: overrides.workedDayTotals ?? { total: 0, inSchedule: 0, outsideSchedule: 0 },
   }
 }
 function repositories(methods: Record<string, unknown> = {}): Repositories {
@@ -225,6 +226,13 @@ describe('Administrative work-log characterization', () => {
     await expect(service.recalculateHourBank(user({ workStartDate: '2026-07-13' }), now)).resolves.toEqual({ previousHourBankMinutes: 15, hourBankMinutes: 60 })
     expect(replaceHourBankMinutes).toHaveBeenCalledWith(user().id, 60)
   })
+  it('recalculates persisted worked day totals', async () => {
+    const recalculateWorkedDayTotals = vi.fn().mockResolvedValue({ total: 3, inSchedule: 2, outsideSchedule: 1 })
+    const service = new WorkLogService(repositories({ recalculateWorkedDayTotals }), workTime, 'America/Sao_Paulo')
+
+    await expect(service.recalculateWorkedDays(user())).resolves.toEqual({ total: 3, inSchedule: 2, outsideSchedule: 1 })
+    expect(recalculateWorkedDayTotals).toHaveBeenCalledWith(user().id)
+  })
   it('registers entry and exposes the updated dashboard', async () => {
     const openWorkLog = vi.fn(); const dashboard = vi.fn().mockResolvedValue([])
     const service = new WorkLogService(repositories({
@@ -293,5 +301,48 @@ describe('HistoryService characterization', () => {
     expect(findWorkLogsUntil).toHaveBeenCalledWith(
       account.id, new Date('2026-07-12T03:00:00.000Z'), new Date('2026-07-15T03:00:00.000Z'),
     )
+  })
+  it('matches the seven supplied August records and exposes persisted absolute day totals', async () => {
+    const logs = [
+      workLog('2026-08-18T11:21:00Z', '2026-08-18T20:20:00Z'),
+      workLog('2026-08-19T11:23:00Z', '2026-08-19T20:19:00Z'),
+      workLog('2026-08-20T11:22:00Z', '2026-08-20T20:19:00Z'),
+      workLog('2026-08-21T11:06:00Z', '2026-08-21T20:10:00Z'),
+      workLog('2026-08-24T11:13:00Z', '2026-08-24T20:09:00Z'),
+      workLog('2026-08-25T11:19:00Z', '2026-08-25T20:19:00Z'),
+      workLog('2026-08-26T11:23:00Z', '2026-08-26T20:19:00Z'),
+    ]
+    const account = user({
+      workStartDate: '2026-08-18', dailyWorkloadMinutes: 530,
+      workedDayTotals: { total: 7, inSchedule: 7, outsideSchedule: 0 },
+    })
+    const result = await history({
+      findWorkLogsOverlappingRange: vi.fn().mockResolvedValue(logs), findFirstWorkLog: vi.fn().mockResolvedValue(logs[0]),
+      findWorkLogsUntil: vi.fn().mockResolvedValue(logs),
+    }).get(account, '2026-08-01', '2026-08-31', 90, 0, new Date('2026-08-27T15:00:00Z'))
+
+    expect(result.totalBalanceMinutes).toBe(58)
+    expect(result.hourBankMinutes).toBe(58)
+    expect(result.workedDayTotals).toEqual({ total: 7, inSchedule: 7, outsideSchedule: 0 })
+  })
+  it('adds nine hours for a prior weekend record while preserving the configured workday calculation', async () => {
+    const weekdays = [
+      workLog('2026-08-18T11:21:00Z', '2026-08-18T20:20:00Z'),
+      workLog('2026-08-19T11:23:00Z', '2026-08-19T20:19:00Z'),
+      workLog('2026-08-20T11:22:00Z', '2026-08-20T20:19:00Z'),
+      workLog('2026-08-21T11:06:00Z', '2026-08-21T20:10:00Z'),
+      workLog('2026-08-24T11:13:00Z', '2026-08-24T20:09:00Z'),
+      workLog('2026-08-25T11:19:00Z', '2026-08-25T20:19:00Z'),
+      workLog('2026-08-26T11:23:00Z', '2026-08-26T20:19:00Z'),
+    ]
+    const weekend = workLog('2026-08-15T11:00:00Z', '2026-08-15T20:00:00Z')
+    const logs = [weekend, ...weekdays]
+    const account = user({ workStartDate: '2026-08-18', dailyWorkloadMinutes: 530 })
+    const result = await history({
+      findWorkLogsOverlappingRange: vi.fn().mockResolvedValue(weekdays), findFirstWorkLog: vi.fn().mockResolvedValue(weekend),
+      findWorkLogsUntil: vi.fn().mockResolvedValue(logs),
+    }).get(account, '2026-08-01', '2026-08-31', 90, 0, new Date('2026-08-27T15:00:00Z'))
+
+    expect(result.hourBankMinutes).toBe(598)
   })
 })

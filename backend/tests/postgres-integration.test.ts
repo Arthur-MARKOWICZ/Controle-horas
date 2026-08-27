@@ -52,7 +52,7 @@ integration('Fastify with PostgreSQL', () => {
 
   it('runs a new database and safely adopts successful Flyway V1-V11 before V13', async () => {
     const versions = await pool.query<{ version: number }>('SELECT version FROM app_schema_migrations ORDER BY version')
-    expect(versions.rows.map((row) => row.version)).toEqual([1,2,3,4,5,6,7,8,9,10,11,12,13,14])
+    expect(versions.rows.map((row) => row.version)).toEqual([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])
     expect((await app.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(200)
 
     const adoptedDatabase = 'controle_horas_adopt_test'
@@ -67,6 +67,9 @@ integration('Fastify with PostgreSQL', () => {
       await adoptedPool.query('DROP TABLE auth_refresh_tokens')
       await adoptedPool.query('DROP TABLE password_reset_tokens')
       await adoptedPool.query('ALTER TABLE users DROP COLUMN hour_bank_minutes')
+      await adoptedPool.query('DROP TABLE user_work_schedule_versions')
+      await adoptedPool.query('ALTER TABLE users DROP CONSTRAINT chk_users_worked_day_totals')
+      await adoptedPool.query('ALTER TABLE users DROP COLUMN total_worked_days, DROP COLUMN scheduled_worked_days, DROP COLUMN outside_schedule_worked_days')
       await adoptedPool.query('DROP TABLE app_schema_migrations')
       await adoptedPool.query(`
         CREATE TABLE flyway_schema_history (
@@ -84,7 +87,7 @@ integration('Fastify with PostgreSQL', () => {
         'SELECT version,source FROM app_schema_migrations ORDER BY version',
       )
       expect(adopted.rows.filter((row) => row.version <= 11).every((row) => row.source === 'flyway')).toBe(true)
-      expect(adopted.rows.at(-1)).toEqual({ version: 14, source: 'typescript' })
+      expect(adopted.rows.at(-1)).toEqual({ version: 15, source: 'typescript' })
     } finally {
       process.env.DATABASE_URL = databaseUrl
       if (adoptedPool) await adoptedPool.end()
@@ -262,6 +265,70 @@ integration('Fastify with PostgreSQL', () => {
     expect(forbidden.statusCode).toBe(403)
   })
 
+  it('persists absolute worked day totals across records inside and outside the historical work calendar', async () => {
+    const admin = await mobileRegister('worked-days-admin@example.com')
+    const child = await app.inject({
+      method: 'POST', url: '/api/users', headers: auth(admin.token),
+      payload: {
+        name: 'Worked Days Employee', email: 'worked-days-employee@example.com', password: 'Password123', role: 'USER',
+        standardEntryTime: '08:00', standardExitTime: '17:50', lunchEnabled: true, lunchDurationMinutes: 60,
+        workDays: ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY'], workStartDate: '2026-08-18',
+      },
+    })
+    expect(child.statusCode).toBe(201)
+    const childId = child.json().data.id as string
+    const records = [
+      ['2026-08-18T11:21:00.000Z', '2026-08-18T20:20:00.000Z'],
+      ['2026-08-19T11:23:00.000Z', '2026-08-19T20:19:00.000Z'],
+      ['2026-08-20T11:22:00.000Z', '2026-08-20T20:19:00.000Z'],
+      ['2026-08-21T11:06:00.000Z', '2026-08-21T20:10:00.000Z'],
+      ['2026-08-24T11:13:00.000Z', '2026-08-24T20:09:00.000Z'],
+      ['2026-08-25T11:19:00.000Z', '2026-08-25T20:19:00.000Z'],
+      ['2026-08-26T11:23:00.000Z', '2026-08-26T20:19:00.000Z'],
+    ]
+    for (const [entryAt, exitAt] of records) {
+      expect((await app.inject({
+        method: 'POST', url: `/api/users/${childId}/work-logs`, headers: auth(admin.token), payload: { entryAt, exitAt },
+      })).statusCode).toBe(200)
+    }
+    const initialHistory = await app.inject({
+      method: 'GET', url: `/api/users/${childId}/history?startDate=2026-08-01&endDate=2026-08-31`, headers: auth(admin.token),
+    })
+    expect(initialHistory.json().data).toMatchObject({
+      totalBalanceMinutes: 58, workedDayTotals: { total: 7, inSchedule: 7, outsideSchedule: 0 },
+    })
+
+    expect((await app.inject({
+      method: 'POST', url: `/api/users/${childId}/work-logs`, headers: auth(admin.token),
+      payload: { entryAt: '2026-08-15T11:00:00.000Z', exitAt: '2026-08-15T20:00:00.000Z' },
+    })).statusCode).toBe(200)
+    const recalculated = await app.inject({
+      method: 'POST', url: `/api/users/${childId}/worked-days/recalculate`, headers: auth(admin.token),
+    })
+    expect(recalculated.statusCode).toBe(200)
+    expect(recalculated.json().data).toEqual({ total: 8, inSchedule: 7, outsideSchedule: 1 })
+    expect((await pool.query(
+      'SELECT total_worked_days,scheduled_worked_days,outside_schedule_worked_days FROM users WHERE id=$1', [childId],
+    )).rows[0]).toEqual({ total_worked_days: 8, scheduled_worked_days: 7, outside_schedule_worked_days: 1 })
+
+    expect((await app.inject({
+      method: 'POST', url: `/api/users/${childId}/work-logs`, headers: auth(admin.token),
+      payload: { entryAt: '2026-08-22T02:30:00.000Z', exitAt: '2026-08-22T04:30:00.000Z' },
+    })).statusCode).toBe(200)
+    expect((await pool.query(
+      'SELECT total_worked_days,scheduled_worked_days,outside_schedule_worked_days FROM users WHERE id=$1', [childId],
+    )).rows[0]).toEqual({ total_worked_days: 9, scheduled_worked_days: 7, outside_schedule_worked_days: 2 })
+
+    expect((await app.inject({
+      method: 'PUT', url: `/api/users/${childId}`, headers: auth(admin.token),
+      payload: { name: 'Worked Days Employee', workDays: ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'] },
+    })).statusCode).toBe(200)
+    expect((await pool.query(
+      `SELECT work_days FROM user_work_schedule_versions
+       WHERE user_id=$1 AND effective_from=(NOW() AT TIME ZONE 'America/Sao_Paulo')::DATE + 1`, [childId],
+    )).rows[0]).toEqual({ work_days: 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY' })
+  })
+
   it('allows a manager to recalculate only an employee in their team', async () => {
     const admin = await mobileRegister('hour-bank-admin@example.com')
     const manager = await app.inject({
@@ -285,6 +352,11 @@ integration('Fastify with PostgreSQL', () => {
     })
     expect(recalculated.statusCode).toBe(200)
 
+    const recalculatedWorkedDays = await app.inject({
+      method: 'POST', url: `/api/users/${employeeId}/worked-days/recalculate`, headers: auth(managerToken),
+    })
+    expect(recalculatedWorkedDays.statusCode).toBe(200)
+
     const employeeSession = await app.inject({
       method: 'POST', url: '/api/auth/mobile/login', payload: { email: 'hour-bank-employee@example.com', password: 'Password123' },
     })
@@ -292,6 +364,10 @@ integration('Fastify with PostgreSQL', () => {
       method: 'POST', url: `/api/users/${employeeId}/hour-bank/recalculate`, headers: auth(employeeSession.json().data.token as string),
     })
     expect(forbidden.statusCode).toBe(403)
+    const workedDaysForbidden = await app.inject({
+      method: 'POST', url: `/api/users/${employeeId}/worked-days/recalculate`, headers: auth(employeeSession.json().data.token as string),
+    })
+    expect(workedDaysForbidden.statusCode).toBe(403)
   })
 
   it('keeps web refresh tokens out of the JSON response', async () => {

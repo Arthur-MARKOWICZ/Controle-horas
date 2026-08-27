@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native'
 import { Button, Card, Field, Loading, Notice, Pagination, Title } from '../components/Ui'
 import { Screen } from '../components/Screen'
-import { getUserHistory, createUserWorkLog, deleteUserWorkLog, updateUserWorkLog } from '../services/historyService'
+import { getUserHistory, createUserWorkLog, deleteUserWorkLog, recalculateUserWorkedDays, updateUserWorkLog } from '../services/historyService'
 import { listUsers } from '../services/userService'
 import { errorMessage } from '../utils/errorMessage'
 import { formatSignedDuration } from '../utils/format'
@@ -154,6 +154,22 @@ export default function WorkLogAdjustmentsScreen() {
     ])
   }
 
+  const recalculateWorkedDays = async () => {
+    if (!userId) return
+    try {
+      setSaving(true)
+      setError('')
+      const response = await recalculateUserWorkedDays(userId)
+      if (!response.success || !response.data) throw new Error(response.message)
+      await load(userId, activeRange, 0)
+      setMessage(`Totais de dias atualizados: ${response.data.total} (${response.data.inSchedule} na jornada e ${response.data.outsideSchedule} fora da jornada).`)
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (loading && users.length === 0) return <Loading />
 
   const logs = history?.days?.flatMap((day) => day.workLogs.map((log) => ({ date: day.date, log }))) || []
@@ -163,6 +179,11 @@ export default function WorkLogAdjustmentsScreen() {
     <Card>
       <Text style={{ color: theme.text, fontWeight: '700' }}>Usuário</Text>
       {users.map((user) => <Pressable key={user.id} onPress={() => selectUser(user.id)} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 10, backgroundColor: userId === user.id ? theme.primary : theme.surface }}><Text style={{ color: userId === user.id ? theme.primaryText : theme.text }}>{user.name} — {user.email}</Text></Pressable>)}
+    </Card>
+    <Card>
+      <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>Dias trabalhados</Text>
+      <Text style={{ color: theme.muted }}>Recalcula os totais absolutos dentro e fora da jornada.</Text>
+      <Button title={saving ? 'Recalculando...' : 'Recalcular totais de dias'} disabled={saving || loading || !userId} onPress={() => void recalculateWorkedDays()} />
     </Card>
     <Card>
       <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>Período dos registros</Text>
