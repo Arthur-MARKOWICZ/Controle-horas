@@ -9,6 +9,7 @@ import type { HistoryData, WorkLog } from '../../types/api'
 import styles from './WorkLogAdjustmentsPage.module.css'
 
 interface FormValues { entryAt: string; exitAt: string }
+interface DateRange { startDate: string; endDate: string }
 const PAGE_SIZE = 10
 
 function toDateTimeInput(value: string): string {
@@ -22,6 +23,12 @@ function toDateTimeInput(value: string): string {
 
 function toInstant(value: string): string { return new Date(`${value}:00-03:00`).toISOString() }
 
+function isValidPeriod(startDate: string, endDate: string): boolean {
+  const start = new Date(`${startDate}T00:00:00`)
+  const end = new Date(`${endDate}T00:00:00`)
+  return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && start <= end && (end.getTime() - start.getTime()) / 86_400_000 <= 90
+}
+
 function WorkLogAdjustmentsPage() {
   const { users, isLoading: loadingUsers, error: usersError } = useUsers()
   const [userId, setUserId] = useState('')
@@ -34,13 +41,17 @@ function WorkLogAdjustmentsPage() {
   const [form, setForm] = useState<FormValues>({ entryAt: '', exitAt: '' })
   const [offset, setOffset] = useState(0)
   const [reloadVersion, setReloadVersion] = useState(0)
-  const range = useMemo(() => getCurrentMonthRange(), [])
+  const defaultRange = useMemo(() => getCurrentMonthRange(), [])
+  const [startDate, setStartDate] = useState(defaultRange.startDate)
+  const [endDate, setEndDate] = useState(defaultRange.endDate)
+  const [activeRange, setActiveRange] = useState<DateRange>(defaultRange)
+  const [filterError, setFilterError] = useState('')
 
   useEffect(() => {
     if (!userId && users.length) setUserId(users[0]!.id)
   }, [userId, users])
 
-  const loadHistory = useCallback(async (targetId: string, nextOffset: number) => {
+  const loadHistory = useCallback(async (targetId: string, range: DateRange, nextOffset: number) => {
     if (!targetId) return
     setLoadingHistory(true); setError('')
     try {
@@ -50,9 +61,9 @@ function WorkLogAdjustmentsPage() {
     } catch (requestError) {
       setHistory(null); setError(await getErrorMessage(requestError, 'Não foi possível carregar os registros.'))
     } finally { setLoadingHistory(false) }
-  }, [range.endDate, range.startDate])
+  }, [])
 
-  useEffect(() => { void loadHistory(userId, offset) }, [loadHistory, offset, reloadVersion, userId])
+  useEffect(() => { void loadHistory(userId, activeRange, offset) }, [activeRange, loadHistory, offset, reloadVersion, userId])
 
   const selectUser = (nextUserId: string) => {
     setOffset(0)
@@ -62,6 +73,17 @@ function WorkLogAdjustmentsPage() {
   const refreshHistory = () => {
     setOffset(0)
     setReloadVersion((version) => version + 1)
+  }
+
+  const applyFilter = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!isValidPeriod(startDate, endDate)) {
+      setFilterError('O período deve ser válido e ter até 90 dias.')
+      return
+    }
+    setFilterError('')
+    setOffset(0)
+    setActiveRange({ startDate, endDate })
   }
 
   const startCreate = () => { setEditing(null); setForm({ entryAt: '', exitAt: '' }); setMessage('') }
@@ -117,6 +139,19 @@ function WorkLogAdjustmentsPage() {
       </label>
       {usersError && <p className={styles.error} role="alert">{usersError}</p>}
     </section>
+    <section className={styles.card} aria-label="Filtro de período">
+      <form className={styles.filterForm} onSubmit={applyFilter}>
+        <label htmlFor="adjustment-start-date">Data inicial
+          <input id="adjustment-start-date" type="date" value={startDate} disabled={loadingHistory || submitting} onChange={(event) => setStartDate(event.target.value)} />
+        </label>
+        <label htmlFor="adjustment-end-date">Data final
+          <input id="adjustment-end-date" type="date" value={endDate} disabled={loadingHistory || submitting} onChange={(event) => setEndDate(event.target.value)} />
+        </label>
+        <div className={styles.filterActions}><button type="submit" disabled={loadingHistory || submitting || !userId}>{loadingHistory ? 'Carregando...' : 'Filtrar registros'}</button></div>
+      </form>
+      <p className={styles.hint}>Escolha um período de até 90 dias para localizar registros importados ou ajustar lançamentos anteriores.</p>
+      {filterError && <p className={styles.error} role="alert">{filterError}</p>}
+    </section>
     <section className={styles.card}>
       <div className={styles.cardHeader}><h2>{editing ? 'Editar registro' : 'Novo registro'}</h2>{editing && <button className={styles.secondaryButton} type="button" onClick={startCreate}>Cancelar edição</button>}</div>
       <form className={styles.form} onSubmit={submit}>
@@ -128,8 +163,8 @@ function WorkLogAdjustmentsPage() {
       {(error || message) && <p className={error ? styles.error : styles.success} role={error ? 'alert' : 'status'}>{error || message}</p>}
     </section>
     <section className={styles.card}>
-      <div className={styles.cardHeader}><h2>Registros de {range.startDate.slice(5).replace('-', '/')}</h2>{loadingHistory && <span>Carregando...</span>}</div>
-      {!loadingHistory && logs.length === 0 && <p className={styles.hint}>Nenhum registro encontrado neste mês.</p>}
+      <div className={styles.cardHeader}><h2>Registros de {activeRange.startDate} a {activeRange.endDate}</h2>{loadingHistory && <span>Carregando...</span>}</div>
+      {!loadingHistory && logs.length === 0 && <p className={styles.hint}>Nenhum registro encontrado neste período.</p>}
       {logs.length > 0 && <div className={styles.tableWrapper}><table><thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th /></tr></thead><tbody>
         {logs.map(({ date, log }) => <tr key={`${date}-${log.id}`}><td>{formatShortDate(date)}</td><td>{formatInstantTime(log.entryAt)}</td><td>{formatInstantTime(log.exitAt)}</td><td><div className={styles.rowActions}><button className={styles.secondaryButton} type="button" disabled={!log.exitAt || submitting} onClick={() => startEdit(log)}>Editar</button><button className={styles.deleteButton} type="button" disabled={!log.exitAt || submitting} onClick={() => void remove(log)}>Excluir</button></div></td></tr>)}
       </tbody></table></div>}

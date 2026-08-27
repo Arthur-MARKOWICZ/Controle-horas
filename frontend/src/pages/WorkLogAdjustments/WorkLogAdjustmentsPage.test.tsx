@@ -59,4 +59,19 @@ describe('WorkLogAdjustmentsPage', () => {
       expect(getUserHistoryMock).toHaveBeenLastCalledWith('user-1', range.startDate, range.endDate, 10, 10)
     })
   })
+
+  it('loads imported records from the selected period', async () => {
+    const user = userEvent.setup()
+    render(<WorkLogAdjustmentsPage />)
+
+    await user.clear(await screen.findByLabelText('Data inicial'))
+    await user.type(screen.getByLabelText('Data inicial'), '2026-07-01')
+    await user.clear(screen.getByLabelText('Data final'))
+    await user.type(screen.getByLabelText('Data final'), '2026-07-31')
+    await user.click(screen.getByRole('button', { name: 'Filtrar registros' }))
+
+    await waitFor(() => {
+      expect(getUserHistoryMock).toHaveBeenLastCalledWith('user-1', '2026-07-01', '2026-07-31', 10, 0)
+    })
+  })
 })

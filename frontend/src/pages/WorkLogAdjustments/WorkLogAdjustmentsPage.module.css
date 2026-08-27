@@ -5,7 +5,10 @@
 .card > label, .form label { display: flex; flex-direction: column; gap: var(--space-xs); font-weight: 600; }
 select, input { border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: .65rem; background: var(--color-surface); color: var(--color-text); }
 .form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); align-items: end; }
+.filterForm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; gap: var(--space-md); align-items: end; }
+.filterForm label { display: flex; flex-direction: column; gap: var(--space-xs); font-weight: 600; }
 .actions { display: flex; align-items: end; }
+.filterActions { display: flex; align-items: end; }
 button { border: 1px solid var(--color-primary); border-radius: var(--radius-sm); background: var(--color-primary); color: var(--color-on-primary); padding: .65rem 1rem; cursor: pointer; font-weight: 600; min-height: 2.75rem; }
 .secondaryButton { background: var(--color-surface); color: var(--color-text); }
 .deleteButton { background: var(--color-danger); border-color: var(--color-danger); }
@@ -14,4 +17,4 @@ button { border: 1px solid var(--color-primary); border-radius: var(--radius-sm)
 .tableWrapper { overflow-x: auto; margin-top: var(--space-md); } table { width: 100%; border-collapse: collapse; } th, td { padding: .75rem .5rem; border-bottom: 1px solid var(--color-border); text-align: left; }
 .rowActions { display: flex; gap: var(--space-sm); }
 button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity: .65; }
-@media (max-width: 42rem) { .form { grid-template-columns: 1fr; } .cardHeader { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 42rem) { .form, .filterForm { grid-template-columns: 1fr; } .cardHeader { align-items: flex-start; flex-direction: column; } }
