@@ -1,5 +1,5 @@
 import type { Repositories } from '../../database/repositories.js'
-import type { DashboardResponse } from '../../domain/contracts.js'
+import type { DashboardResponse, HourBankRecalculationResponse } from '../../domain/contracts.js'
 import { workLogResponse } from '../../domain/contracts.js'
 import type { CloseReason, User } from '../../domain/types.js'
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors.js'
@@ -62,17 +62,7 @@ export class WorkLogService {
       expectedExitAt = this.workTime.expectedExit(
         logs, date, user.dailyWorkloadMinutes, user.workDays, user.lunchEnabled, user.lunchDurationMinutes,
       )
-      const first = await this.repositories.findFirstWorkLog(user.id)
-      const absenceStart = this.workTime.resolvedStartDate(user.workStartDate, first)
-      const hourBankStart = this.workTime.hourBankStartDate(user.workStartDate, first)
-      if (hourBankStart) {
-        const allLogs = await this.repositories.findWorkLogsUntil(
-          user.id, localDateStart(addDays(hourBankStart, -1), this.timeZone), end,
-        )
-        hourBankMinutes = this.workTime.hourBank(
-          allLogs, user.dailyWorkloadMinutes, user.workDays, hourBankStart, date, absenceStart || hourBankStart,
-        )
-      }
+      hourBankMinutes = await this.calculateHourBank(user, date, end)
     }
     return {
       date, workStartDate: user.workStartDate, dailyWorkloadMinutes: user.dailyWorkloadMinutes,
@@ -82,6 +72,26 @@ export class WorkLogService {
       workedMinutesToday, pausedMinutesToday: pausedMinutes(logs), balanceMinutesToday, hourBankMinutes,
       workLogs: logs.map(workLogResponse), scheduleConfigured,
     }
+  }
+
+  async recalculateHourBank(user: User, now = new Date()): Promise<HourBankRecalculationResponse> {
+    const date = localDateOf(now, this.timeZone)
+    const end = localDateStart(addDays(date, 1), this.timeZone)
+    const hourBankMinutes = await this.calculateHourBank(user, date, end)
+    return this.repositories.replaceHourBankMinutes(user.id, hourBankMinutes)
+  }
+
+  private async calculateHourBank(user: User, untilDate: string, end: Date): Promise<number> {
+    const first = await this.repositories.findFirstWorkLog(user.id)
+    const absenceStart = this.workTime.resolvedStartDate(user.workStartDate, first)
+    const hourBankStart = this.workTime.hourBankStartDate(user.workStartDate, first)
+    if (!hourBankStart) return 0
+    const allLogs = await this.repositories.findWorkLogsUntil(
+      user.id, localDateStart(addDays(hourBankStart, -1), this.timeZone), end,
+    )
+    return this.workTime.hourBank(
+      allLogs, user.dailyWorkloadMinutes, user.workDays, hourBankStart, untilDate, absenceStart || hourBankStart,
+    )
   }
 
   private validateAdministrativeTimes(entryAt: Date, exitAt: Date): void {

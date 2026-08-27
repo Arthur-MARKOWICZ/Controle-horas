@@ -8,19 +8,24 @@ import { getCurrentMonthRange } from '../../utils/formatTime'
 const useUsersMock = vi.fn()
 const getUserHistoryMock = vi.fn()
 const deleteUserWorkLogMock = vi.fn()
+const recalculateUserHourBankMock = vi.fn()
+const useAuthMock = vi.fn()
 
 vi.mock('../../layouts/MainLayout', () => ({ default: ({ children }: { children: ReactNode }) => children }))
+vi.mock('../../hooks/useAuth', () => ({ useAuth: () => useAuthMock() }))
 vi.mock('../../hooks/useUsers', () => ({ useUsers: () => useUsersMock() }))
 vi.mock('../../services/historyService', () => ({
   getUserHistory: (...args: unknown[]) => getUserHistoryMock(...args),
   createUserWorkLog: vi.fn(),
   updateUserWorkLog: vi.fn(),
   deleteUserWorkLog: (...args: unknown[]) => deleteUserWorkLogMock(...args),
+  recalculateUserHourBank: (...args: unknown[]) => recalculateUserHourBankMock(...args),
 }))
 
 describe('WorkLogAdjustmentsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useAuthMock.mockReturnValue({ isAdmin: true })
     useUsersMock.mockReturnValue({
       users: [{ id: 'user-1', name: 'Ana', email: 'ana@example.com' }], isLoading: false, error: '',
     })
@@ -33,7 +38,29 @@ describe('WorkLogAdjustmentsPage', () => {
       },
     })
     deleteUserWorkLogMock.mockResolvedValue({ success: true, message: 'Work log deleted successfully', data: null })
+    recalculateUserHourBankMock.mockResolvedValue({ success: true, message: 'Hour bank recalculated successfully', data: { previousHourBankMinutes: 30, hourBankMinutes: 60 } })
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+  })
+
+  it('recalculates and refreshes the selected user hour bank', async () => {
+    const user = userEvent.setup()
+    render(<WorkLogAdjustmentsPage />)
+
+    await user.click(await screen.findByRole('button', { name: 'Recalcular banco de horas' }))
+
+    await waitFor(() => expect(recalculateUserHourBankMock).toHaveBeenCalledWith('user-1'))
+    expect(await screen.findByText('Banco de horas recalculado e atualizado: +1h00.')).toBeInTheDocument()
+    expect(getUserHistoryMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('lets managers recalculate but does not show administrative work-log actions', async () => {
+    useAuthMock.mockReturnValue({ isAdmin: false })
+    render(<WorkLogAdjustmentsPage />)
+
+    expect(await screen.findByRole('button', { name: 'Recalcular banco de horas' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Criar registro' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Excluir' })).not.toBeInTheDocument()
   })
 
   it('confirms and deletes a closed work log', async () => {

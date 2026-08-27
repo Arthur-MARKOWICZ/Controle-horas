@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN hour_bank_minutes INTEGER NOT NULL DEFAULT 0;

@@ -10,7 +10,7 @@ interface UserRow extends QueryResultRow {
   id: string; name: string; email: string; password_hash: string; role: UserRole
   manager_id: string | null; manager_name: string | null; created_by_id: string | null
   daily_workload_minutes: number; standard_entry_time: string | null; standard_exit_time: string | null
-  lunch_enabled: boolean; lunch_duration_minutes: number; work_days: string | null; work_start_date: string | null
+  lunch_enabled: boolean; lunch_duration_minutes: number; work_days: string | null; work_start_date: string | null; hour_bank_minutes: number
   created_at: Date; updated_at: Date
 }
 
@@ -23,7 +23,7 @@ const USER_COLUMNS = `
   u.id, u.name, u.email, u.password_hash, u.role, u.manager_id,
   manager.name AS manager_name, u.created_by_id, u.daily_workload_minutes,
   u.standard_entry_time, u.standard_exit_time, u.lunch_enabled,
-  u.lunch_duration_minutes, u.work_days, u.work_start_date, u.created_at, u.updated_at`
+  u.lunch_duration_minutes, u.work_days, u.work_start_date, u.hour_bank_minutes, u.created_at, u.updated_at`
 
 function mapUser(row: UserRow): User {
   return {
@@ -32,7 +32,7 @@ function mapUser(row: UserRow): User {
     dailyWorkloadMinutes: row.daily_workload_minutes, standardEntryTime: row.standard_entry_time,
     standardExitTime: row.standard_exit_time, lunchEnabled: row.lunch_enabled,
     lunchDurationMinutes: row.lunch_duration_minutes, workDays: normalizeWorkDays(row.work_days),
-    workStartDate: row.work_start_date, createdAt: row.created_at, updatedAt: row.updated_at,
+    workStartDate: row.work_start_date, hourBankMinutes: row.hour_bank_minutes, createdAt: row.created_at, updatedAt: row.updated_at,
   }
 }
 
@@ -302,6 +302,22 @@ export class Repositories {
        WHERE user_id=$1 ORDER BY entry_at ASC LIMIT 1`, [userId],
     )
     return result.rows[0] ? mapWorkLog(result.rows[0]) : null
+  }
+
+  async replaceHourBankMinutes(userId: string, hourBankMinutes: number): Promise<{ previousHourBankMinutes: number; hourBankMinutes: number }> {
+    const result = await this.pool.query<{ previous_hour_bank_minutes: number; hour_bank_minutes: number }>(
+      `WITH locked AS (
+         SELECT hour_bank_minutes FROM users WHERE id=$1 FOR UPDATE
+       ), updated AS (
+         UPDATE users SET hour_bank_minutes=$2,updated_at=NOW() WHERE id=$1
+         RETURNING hour_bank_minutes
+       ) SELECT locked.hour_bank_minutes AS previous_hour_bank_minutes,updated.hour_bank_minutes
+         FROM locked CROSS JOIN updated`,
+      [userId, hourBankMinutes],
+    )
+    const row = result.rows[0]
+    if (!row) throw new Error('User not found while replacing hour bank balance')
+    return { previousHourBankMinutes: row.previous_hour_bank_minutes, hourBankMinutes: row.hour_bank_minutes }
   }
 
   async createRefreshToken(record: RefreshTokenRecord, client: DatabaseClient = this.pool): Promise<void> {

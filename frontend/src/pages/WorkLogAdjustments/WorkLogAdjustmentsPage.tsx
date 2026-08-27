@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import MainLayout from '../../layouts/MainLayout'
+import { useAuth } from '../../hooks/useAuth'
 import { useUsers } from '../../hooks/useUsers'
 import * as historyService from '../../services/historyService'
 import Pagination from '../../components/Pagination/Pagination'
@@ -30,6 +31,7 @@ function isValidPeriod(startDate: string, endDate: string): boolean {
 }
 
 function WorkLogAdjustmentsPage() {
+  const { isAdmin } = useAuth()
   const { users, isLoading: loadingUsers, error: usersError } = useUsers()
   const [userId, setUserId] = useState('')
   const [history, setHistory] = useState<HistoryData | null>(null)
@@ -125,12 +127,26 @@ function WorkLogAdjustmentsPage() {
     } finally { setSubmitting(false) }
   }
 
+  const recalculateHourBank = async () => {
+    if (!userId) return
+    setSubmitting(true); setError(''); setMessage('')
+    try {
+      const response = await historyService.recalculateUserHourBank(userId)
+      if (!response.success || !response.data) throw new Error(response.message || 'Não foi possível recalcular o banco de horas.')
+      setOffset(0)
+      await loadHistory(userId, activeRange, 0)
+      setMessage(`Banco de horas recalculado e atualizado: ${formatSignedDuration(response.data.hourBankMinutes)}.`)
+    } catch (requestError) {
+      setError(await getErrorMessage(requestError, 'Não foi possível recalcular o banco de horas.'))
+    } finally { setSubmitting(false) }
+  }
+
   const logs = history?.days.flatMap((day) => day.workLogs.map((log) => ({ date: day.date, log }))) ?? []
 
   return <MainLayout><main className={styles.page}>
     <header className={styles.header}>
       <h1>Ajustes de ponto</h1>
-      <p>Crie registros esquecidos ou corrija entrada e saída de usuários.</p>
+      <p>{isAdmin ? 'Crie registros esquecidos, corrija entrada e saída ou recalcule o banco de horas.' : 'Recalcule o banco de horas dos usuários do seu time.'}</p>
     </header>
     <section className={styles.card}>
       <label htmlFor="adjustment-user">Usuário
@@ -139,6 +155,13 @@ function WorkLogAdjustmentsPage() {
         </select>
       </label>
       {usersError && <p className={styles.error} role="alert">{usersError}</p>}
+    </section>
+    <section className={styles.card} aria-label="Recálculo do banco de horas">
+      <div className={styles.cardHeader}>
+        <div><h2>Banco de horas</h2><p className={styles.hint}>Recalcula todos os lançamentos do usuário e substitui o saldo armazenado.</p></div>
+        <button type="button" disabled={submitting || loadingHistory || !userId} onClick={() => void recalculateHourBank()}>{submitting ? 'Recalculando...' : 'Recalcular banco de horas'}</button>
+      </div>
+      {(error || message) && <p className={error ? styles.error : styles.success} role={error ? 'alert' : 'status'}>{error || message}</p>}
     </section>
     <section className={styles.card} aria-label="Filtro de período">
       <form className={styles.filterForm} onSubmit={applyFilter}>
@@ -153,7 +176,7 @@ function WorkLogAdjustmentsPage() {
       <p className={styles.hint}>Escolha um período de até 90 dias para localizar registros importados ou ajustar lançamentos anteriores.</p>
       {filterError && <p className={styles.error} role="alert">{filterError}</p>}
     </section>
-    <section className={styles.card}>
+    {isAdmin && <section className={styles.card}>
       <div className={styles.cardHeader}><h2>{editing ? 'Editar registro' : 'Novo registro'}</h2>{editing && <button className={styles.secondaryButton} type="button" onClick={startCreate}>Cancelar edição</button>}</div>
       <form className={styles.form} onSubmit={submit}>
         <label>Entrada<input type="datetime-local" value={form.entryAt} required disabled={submitting || !userId} onChange={(event) => setForm({ ...form, entryAt: event.target.value })} /></label>
@@ -161,14 +184,13 @@ function WorkLogAdjustmentsPage() {
         <div className={styles.actions}><button type="submit" disabled={submitting || !userId}>{submitting ? 'Salvando...' : editing ? 'Salvar alteração' : 'Criar registro'}</button></div>
       </form>
       <p className={styles.hint}>Os horários são interpretados no fuso de São Paulo. Registros não podem se sobrepor.</p>
-      {(error || message) && <p className={error ? styles.error : styles.success} role={error ? 'alert' : 'status'}>{error || message}</p>}
-    </section>
+    </section>}
     <section className={styles.card}>
       <div className={styles.cardHeader}><h2>Registros de {activeRange.startDate} a {activeRange.endDate}</h2>{loadingHistory && <span>Carregando...</span>}</div>
       {history && <p className={styles.hint}>Banco de horas atual: {formatSignedDuration(history.hourBankMinutes)}</p>}
       {!loadingHistory && logs.length === 0 && <p className={styles.hint}>Nenhum registro encontrado neste período.</p>}
-      {logs.length > 0 && <div className={styles.tableWrapper}><table><thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th /></tr></thead><tbody>
-        {logs.map(({ date, log }) => <tr key={`${date}-${log.id}`}><td>{formatShortDate(date)}</td><td>{formatInstantTime(log.entryAt)}</td><td>{formatInstantTime(log.exitAt)}</td><td><div className={styles.rowActions}><button className={styles.secondaryButton} type="button" disabled={!log.exitAt || submitting} onClick={() => startEdit(log)}>Editar</button><button className={styles.deleteButton} type="button" disabled={!log.exitAt || submitting} onClick={() => void remove(log)}>Excluir</button></div></td></tr>)}
+      {logs.length > 0 && <div className={styles.tableWrapper}><table><thead><tr><th>Data</th><th>Entrada</th><th>Saída</th>{isAdmin && <th />}</tr></thead><tbody>
+        {logs.map(({ date, log }) => <tr key={`${date}-${log.id}`}><td>{formatShortDate(date)}</td><td>{formatInstantTime(log.entryAt)}</td><td>{formatInstantTime(log.exitAt)}</td>{isAdmin && <td><div className={styles.rowActions}><button className={styles.secondaryButton} type="button" disabled={!log.exitAt || submitting} onClick={() => startEdit(log)}>Editar</button><button className={styles.deleteButton} type="button" disabled={!log.exitAt || submitting} onClick={() => void remove(log)}>Excluir</button></div></td>}</tr>)}
       </tbody></table></div>}
       <Pagination pagination={history?.pagination} disabled={loadingHistory || submitting} onPageChange={setOffset} />
     </section>

@@ -52,7 +52,7 @@ integration('Fastify with PostgreSQL', () => {
 
   it('runs a new database and safely adopts successful Flyway V1-V11 before V13', async () => {
     const versions = await pool.query<{ version: number }>('SELECT version FROM app_schema_migrations ORDER BY version')
-    expect(versions.rows.map((row) => row.version)).toEqual([1,2,3,4,5,6,7,8,9,10,11,12,13])
+    expect(versions.rows.map((row) => row.version)).toEqual([1,2,3,4,5,6,7,8,9,10,11,12,13,14])
     expect((await app.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(200)
 
     const adoptedDatabase = 'controle_horas_adopt_test'
@@ -83,7 +83,7 @@ integration('Fastify with PostgreSQL', () => {
         'SELECT version,source FROM app_schema_migrations ORDER BY version',
       )
       expect(adopted.rows.filter((row) => row.version <= 11).every((row) => row.source === 'flyway')).toBe(true)
-      expect(adopted.rows.at(-1)).toEqual({ version: 13, source: 'typescript' })
+      expect(adopted.rows.at(-1)).toEqual({ version: 14, source: 'typescript' })
     } finally {
       process.env.DATABASE_URL = databaseUrl
       if (adoptedPool) await adoptedPool.end()
@@ -202,6 +202,14 @@ integration('Fastify with PostgreSQL', () => {
     expect(historyBeforeDelete.statusCode).toBe(200)
     expect(historyBeforeDelete.json().data.hourBankMinutes).toBe(540)
 
+    const recalculated = await app.inject({
+      method: 'POST', url: `/api/users/${childId}/hour-bank/recalculate`, headers: auth(admin.token),
+    })
+    expect(recalculated.statusCode).toBe(200)
+    expect(recalculated.json().data).toMatchObject({ previousHourBankMinutes: 0, hourBankMinutes: 540 })
+    expect((await pool.query<{ hour_bank_minutes: number }>('SELECT hour_bank_minutes FROM users WHERE id=$1', [childId])).rows[0])
+      .toEqual({ hour_bank_minutes: 540 })
+
     const deleted = await app.inject({
       method: 'DELETE', url: `/api/users/${childId}/work-logs/${workLogId}`, headers: auth(admin.token),
     })
@@ -249,6 +257,38 @@ integration('Fastify with PostgreSQL', () => {
     const forbidden = await app.inject({
       method: 'POST', url: `/api/users/${childId}/work-logs`, headers: auth(employee.json().data.token as string),
       payload: { entryAt: '2026-07-14T11:00:00.000Z', exitAt: '2026-07-14T20:00:00.000Z' },
+    })
+    expect(forbidden.statusCode).toBe(403)
+  })
+
+  it('allows a manager to recalculate only an employee in their team', async () => {
+    const admin = await mobileRegister('hour-bank-admin@example.com')
+    const manager = await app.inject({
+      method: 'POST', url: '/api/users', headers: auth(admin.token),
+      payload: { name: 'Hour Bank Manager', email: 'hour-bank-manager@example.com', password: 'Password123', role: 'MANAGER' },
+    })
+    expect(manager.statusCode).toBe(201)
+    const managerSession = await app.inject({
+      method: 'POST', url: '/api/auth/mobile/login', payload: { email: 'hour-bank-manager@example.com', password: 'Password123' },
+    })
+    const managerToken = managerSession.json().data.token as string
+    const employee = await app.inject({
+      method: 'POST', url: '/api/users', headers: auth(managerToken),
+      payload: { name: 'Hour Bank Employee', email: 'hour-bank-employee@example.com', password: 'Password123', role: 'USER' },
+    })
+    expect(employee.statusCode).toBe(201)
+    const employeeId = employee.json().data.id as string
+
+    const recalculated = await app.inject({
+      method: 'POST', url: `/api/users/${employeeId}/hour-bank/recalculate`, headers: auth(managerToken),
+    })
+    expect(recalculated.statusCode).toBe(200)
+
+    const employeeSession = await app.inject({
+      method: 'POST', url: '/api/auth/mobile/login', payload: { email: 'hour-bank-employee@example.com', password: 'Password123' },
+    })
+    const forbidden = await app.inject({
+      method: 'POST', url: `/api/users/${employeeId}/hour-bank/recalculate`, headers: auth(employeeSession.json().data.token as string),
     })
     expect(forbidden.statusCode).toBe(403)
   })

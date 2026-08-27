@@ -35,9 +35,11 @@ function AppRoutes() {
       <Route path="/settings/schedule" element={<ScheduleSettingsPage />} />
       <Route path="/settings/account" element={<AccountPage />} />
     </Route>
+    <Route element={<RoleRoute allowedRoles={['ADMIN', 'MANAGER']} />}>
+      <Route path="/settings/work-logs" element={<WorkLogAdjustmentsPage />} />
+    </Route>
     <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
       <Route path="/import" element={<ImportPage />} />
-      <Route path="/settings/work-logs" element={<WorkLogAdjustmentsPage />} />
     </Route>
     <Route element={<RoleRoute allowedRoles={['ADMIN', 'MANAGER']} />}>
       <Route path="/settings/users" element={<UsersPage />} />

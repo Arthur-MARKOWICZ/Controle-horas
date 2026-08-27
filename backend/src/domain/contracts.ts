@@ -23,6 +23,11 @@ export interface HistoryResponse {
   pagination: { limit: number; offset: number; total: number }
 }
 
+export interface HourBankRecalculationResponse {
+  previousHourBankMinutes: number
+  hourBankMinutes: number
+}
+
 export function workLogResponse(log: WorkLog): WorkLogResponse {
   return {
     id: log.id,

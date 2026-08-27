@@ -15,7 +15,7 @@ function user(overrides: Partial<User> = {}): User {
     id: '00000000-0000-4000-8000-000000000001', name: 'Root', email: 'root@example.com', passwordHash: 'hash',
     role: 'ADMIN', managerId: null, managerName: null, createdById: null, workStartDate: '2026-07-01',
     dailyWorkloadMinutes: 480, standardEntryTime: '08:00', standardExitTime: '17:00', lunchEnabled: true,
-    lunchDurationMinutes: 60, workDays: ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY'],
+    lunchDurationMinutes: 60, workDays: ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY'], hourBankMinutes: 0,
     createdAt: now, updatedAt: now, ...overrides,
   }
 }
@@ -214,6 +214,16 @@ describe('Administrative work-log characterization', () => {
   it('reports a missing administrative record when deleting', async () => {
     const service = new WorkLogService(repositories({ deleteClosedWorkLog: vi.fn().mockResolvedValue(false) }), workTime, 'America/Sao_Paulo')
     await expect(service.deleteAdministrative(user(), 'missing-log')).rejects.toMatchObject({ statusCode: 404 })
+  })
+  it('recalculates the accumulated hour bank and replaces its stored balance', async () => {
+    const imported = workLog('2026-07-13T11:00:00Z', '2026-07-13T20:00:00Z')
+    const replaceHourBankMinutes = vi.fn().mockResolvedValue({ previousHourBankMinutes: 15, hourBankMinutes: 60 })
+    const service = new WorkLogService(repositories({
+      findFirstWorkLog: vi.fn().mockResolvedValue(imported), findWorkLogsUntil: vi.fn().mockResolvedValue([imported]), replaceHourBankMinutes,
+    }), workTime, 'America/Sao_Paulo')
+
+    await expect(service.recalculateHourBank(user({ workStartDate: '2026-07-13' }), now)).resolves.toEqual({ previousHourBankMinutes: 15, hourBankMinutes: 60 })
+    expect(replaceHourBankMinutes).toHaveBeenCalledWith(user().id, 60)
   })
   it('registers entry and exposes the updated dashboard', async () => {
     const openWorkLog = vi.fn(); const dashboard = vi.fn().mockResolvedValue([])

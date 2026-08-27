@@ -23,6 +23,7 @@ export interface User {
   lunchDurationMinutes: number
   workDays: WorkDay[]
   workStartDate: string | null
+  hourBankMinutes: number
   createdAt: Date
   updatedAt: Date
 }

@@ -288,6 +288,18 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
     if (actor(request).role !== 'ADMIN') throw new ForbiddenError('Only administrators can adjust work logs')
     return users.requireAccess(actor(request), request.params.userId)
   }
+  const requireHourBankRecalculationAccess = async (request: FastifyRequest<{ Params: { userId: string } }>): Promise<User> => {
+    await authenticate(request)
+    if (!['ADMIN', 'MANAGER'].includes(actor(request).role)) {
+      throw new ForbiddenError('Only administrators and managers can recalculate hour banks')
+    }
+    return users.requireAccess(actor(request), request.params.userId)
+  }
+  app.post<{ Params: { userId: string } }>('/api/users/:userId/hour-bank/recalculate', {
+    preHandler: requireHourBankRecalculationAccess, schema: { params: idParams() },
+  }, async (request) => ok('Hour bank recalculated successfully', await workLogs.recalculateHourBank(
+    await users.requireAccess(actor(request), request.params.userId),
+  )))
   app.post<{ Params: { userId: string }; Body: AdministrativeWorkLogBody }>('/api/users/:userId/work-logs', {
     preHandler: requireAdminWorkLogAccess, schema: { params: idParams(), body: administrativeWorkLogSchema() },
   }, async (request) => ok('Work log created successfully', await workLogs.createAdministrative(

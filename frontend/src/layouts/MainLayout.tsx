@@ -35,7 +35,7 @@ function MainLayout({ children }: { children: ReactNode }) {
           >
             Histórico
           </NavLink>
-          {isAdmin && (
+          {canManageUsers && (
             <>
               <NavLink
                 to="/settings/work-logs"
@@ -43,6 +43,10 @@ function MainLayout({ children }: { children: ReactNode }) {
               >
                 Ajustes de ponto
               </NavLink>
+            </>
+          )}
+          {isAdmin && (
+            <>
               <NavLink
                 to="/import"
                 className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
