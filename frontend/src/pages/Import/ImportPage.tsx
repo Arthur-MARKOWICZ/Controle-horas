@@ -38,8 +38,8 @@ function ImportPage() {
         <section className={styles.card} aria-labelledby="template-title">
           <h2 id="template-title">Arquivo modelo</h2>
           <p className={styles.description}>
-            Colunas: email, entry_at, exit_at, close_reason (PAUSE, LUNCH ou EXIT). Use DD/MM/YYYY HH:mm,
-            como 14/07/2026 13:00; os horários são de São Paulo.
+            Colunas: email, date, entry_at, exit_at, close_reason (PAUSE, LUNCH ou EXIT). Use DD/MM/YYYY para a data,
+            como 14/07/2026, e HH:mm em 24 horas para os horários, como 13:00; os horários são de São Paulo.
           </p>
           <div className={styles.actions}>
             <button type="button" disabled={isDownloading} onClick={() => downloadTemplate('csv')}>

@@ -24,7 +24,7 @@ function service(methods: Record<string, unknown> = {}) {
 describe('FileService', () => {
   it('generates CSV and XLSX templates', async () => {
     const files = service().files
-    expect(files.csvTemplate().toString()).toContain('user@empresa.com,14/07/2026 08:30,14/07/2026 12:00,PAUSE')
+    expect(files.csvTemplate().toString()).toContain('user@empresa.com,14/07/2026,08:30,12:00,PAUSE')
     const template = await files.xlsxTemplate()
     expect(template.subarray(0, 2)).toEqual(Buffer.from('PK'))
 
@@ -40,16 +40,16 @@ describe('FileService', () => {
     const importClosedWorkLogs = vi.fn().mockResolvedValue(new Map([[3, 'Overlapping work log already exists for this period']]))
     const { files } = service({ findUserByEmail: vi.fn().mockResolvedValueOnce(user).mockResolvedValueOnce(null), importClosedWorkLogs })
     const result = await files.importFile(user, 'records.csv', Buffer.from(
-      'email,entry_at,exit_at,close_reason\nana@example.com,13/07/2026 08:00,13/07/2026 17:00,EXIT\nmissing@example.com,14/07/2026 08:00,14/07/2026 17:00,EXIT\n',
+      'email,date,entry_at,exit_at,close_reason\nana@example.com,13/07/2026,08:00,17:00,EXIT\nmissing@example.com,14/07/2026,08:00,17:00,EXIT\n',
     ))
     expect(result).toEqual(expect.objectContaining({ importedCount: 0, errorCount: 2 }))
     expect(importClosedWorkLogs).toHaveBeenCalledWith([expect.objectContaining({ userId: user.id, closeReason: 'EXIT' })])
   })
 
-  it('imports Brazilian datetimes as Sao Paulo instants, including shortly after midnight', async () => {
+  it('imports Brazilian dates and 24-hour times as Sao Paulo instants, including shortly after midnight', async () => {
     const { files, repositories } = service()
     await files.importFile(user, 'records.csv', Buffer.from(
-      'email,entry_at,exit_at,close_reason\nana@example.com,14/07/2026 00:30,14/07/2026 01:30,EXIT\n',
+      'email,date,entry_at,exit_at,close_reason\nana@example.com,14/07/2026,00:30,01:30,EXIT\n',
     ))
     const [row] = (repositories.importClosedWorkLogs as ReturnType<typeof vi.fn>).mock.calls[0]![0]
     expect(row.entryAt.toISOString()).toBe('2026-07-14T03:30:00.000Z')
@@ -58,14 +58,15 @@ describe('FileService', () => {
   })
 
   it.each([
-    ['2026-07-14T13:00:00-03:00', '14/07/2026 17:00', 'must follow format DD/MM/YYYY HH:mm'],
-    ['31/02/2026 13:00', '14/07/2026 17:00', 'must be a valid date and time'],
-    ['14/07/2026 24:00', '14/07/2026 17:00', 'must be a valid date and time'],
-    ['14/07/2026 13:00:30', '14/07/2026 17:00', 'must follow format DD/MM/YYYY HH:mm'],
-  ])('rejects invalid Brazilian datetime %s', async (entryAt, exitAt, message) => {
+    ['2026-07-14', '13:00', '17:00', 'date must follow format DD/MM/YYYY'],
+    ['31/02/2026', '13:00', '17:00', 'must be a valid date and time'],
+    ['14/07/2026', '24:00', '17:00', 'must be a valid date and time'],
+    ['14/07/2026', '01:00 PM', '17:00', 'must follow format HH:mm (24-hour)'],
+    ['14/07/2026', '13:00:30', '17:00', 'must follow format HH:mm (24-hour)'],
+  ])('rejects invalid Brazilian date or 24-hour time %s %s', async (date, entryAt, exitAt, message) => {
     const { files } = service()
     const result = await files.importFile(user, 'records.csv', Buffer.from(
-      `email,entry_at,exit_at,close_reason\nana@example.com,${entryAt},${exitAt},EXIT\n`,
+      `email,date,entry_at,exit_at,close_reason\nana@example.com,${date},${entryAt},${exitAt},EXIT\n`,
     )) as { importedCount: number; errorCount: number; errors: Array<{ message: string }> }
     expect(result).toMatchObject({ importedCount: 0, errorCount: 1 })
     expect(result.errors[0]?.message).toContain(message)

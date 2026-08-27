@@ -7,18 +7,18 @@ import { brazilianDateTimeToInstant } from '../../shared/time.js'
 import type { HistoryService } from '../history/history-service.js'
 import type { UserService } from '../users/user-service.js'
 
-interface RawImportRow { rowNumber: number; email: string; entryAt: unknown; exitAt: unknown; closeReason: string }
+interface RawImportRow { rowNumber: number; email: string; date: unknown; entryAt: unknown; exitAt: unknown; closeReason: string }
 interface ImportError { row: number; message: string }
 
 const TEMPLATE_ROWS = [
-  ['email', 'entry_at', 'exit_at', 'close_reason'],
-  ['user@empresa.com', '14/07/2026 08:30', '14/07/2026 12:00', 'PAUSE'],
-  ['user@empresa.com', '14/07/2026 13:00', '14/07/2026 17:20', 'EXIT'],
+  ['email', 'date', 'entry_at', 'exit_at', 'close_reason'],
+  ['user@empresa.com', '14/07/2026', '08:30', '12:00', 'PAUSE'],
+  ['user@empresa.com', '14/07/2026', '13:00', '17:20', 'EXIT'],
 ]
 
-const XLSX_TEMPLATE_TIMES = [
-  [new Date(Date.UTC(2026, 6, 14, 8, 30)), new Date(Date.UTC(2026, 6, 14, 12, 0))],
-  [new Date(Date.UTC(2026, 6, 14, 13, 0)), new Date(Date.UTC(2026, 6, 14, 17, 20))],
+const XLSX_TEMPLATE_VALUES = [
+  [new Date(Date.UTC(2026, 6, 14)), new Date(Date.UTC(1899, 11, 30, 8, 30)), new Date(Date.UTC(1899, 11, 30, 12, 0))],
+  [new Date(Date.UTC(2026, 6, 14)), new Date(Date.UTC(1899, 11, 30, 13, 0)), new Date(Date.UTC(1899, 11, 30, 17, 20))],
 ]
 
 function duration(totalMinutes: number, signed = false): string {
@@ -43,15 +43,20 @@ function localInstant(value: string | null, timeZone: string): string {
   }).format(new Date(value))
 }
 
-function xlsxDateTimeValue(value: unknown): unknown {
+function xlsxDateValue(value: unknown): unknown {
   if (!(value instanceof Date)) return value
-  if (value.getUTCSeconds() !== 0 || value.getUTCMilliseconds() !== 0) return ''
   const day = value.getUTCDate().toString().padStart(2, '0')
   const month = (value.getUTCMonth() + 1).toString().padStart(2, '0')
   const year = value.getUTCFullYear().toString().padStart(4, '0')
+  return `${day}/${month}/${year}`
+}
+
+function xlsxTimeValue(value: unknown): unknown {
+  if (!(value instanceof Date)) return value
+  if (value.getUTCSeconds() !== 0 || value.getUTCMilliseconds() !== 0) return ''
   const hour = value.getUTCHours().toString().padStart(2, '0')
   const minute = value.getUTCMinutes().toString().padStart(2, '0')
-  return `${day}/${month}/${year} ${hour}:${minute}`
+  return `${hour}:${minute}`
 }
 
 export class FileService {
@@ -72,12 +77,13 @@ export class FileService {
     const sheet = workbook.addWorksheet('work_logs')
     sheet.addRow(TEMPLATE_ROWS[0])
     TEMPLATE_ROWS.slice(1).forEach((row, index) => {
-      const [entryAt, exitAt] = XLSX_TEMPLATE_TIMES[index]!
-      sheet.addRow([row[0], entryAt, exitAt, row[3]])
+      const [date, entryAt, exitAt] = XLSX_TEMPLATE_VALUES[index]!
+      sheet.addRow([row[0], date, entryAt, exitAt, row[4]])
     })
     for (let row = 2; row <= 3; row++) {
-      sheet.getCell(row, 2).numFmt = 'dd/mm/yyyy hh:mm'
-      sheet.getCell(row, 3).numFmt = 'dd/mm/yyyy hh:mm'
+      sheet.getCell(row, 2).numFmt = 'dd/mm/yyyy'
+      sheet.getCell(row, 3).numFmt = 'hh:mm'
+      sheet.getCell(row, 4).numFmt = 'hh:mm'
     }
     sheet.columns.forEach((column) => { column.width = 32 })
     return Buffer.from(await workbook.xlsx.writeBuffer())
@@ -103,8 +109,8 @@ export class FileService {
         const target = await this.repositories.findUserByEmail(email)
         if (!target) throw new NotFoundError(`User not found for email: ${email}`)
         if (!(await this.users.canAccess(actor, target))) throw new ForbiddenError(`No permission to import records for email: ${email}`)
-        const entryAt = this.parseInstant(row.entryAt, 'entry_at')
-        const exitAt = this.parseInstant(row.exitAt, 'exit_at')
+        const entryAt = this.parseInstant(row.date, row.entryAt, 'entry_at')
+        const exitAt = this.parseInstant(row.date, row.exitAt, 'exit_at')
         if (exitAt < entryAt) throw new ValidationError('exit_at must be after or equal to entry_at')
         const reason = (row.closeReason.trim().toUpperCase() || 'EXIT') as CloseReason
         if (!CLOSE_REASONS.includes(reason)) throw new ValidationError('close_reason must be PAUSE, LUNCH or EXIT')
@@ -175,7 +181,7 @@ export class FileService {
     }
     this.validateHeader(records.shift() || [])
     return records.map((row, index) => ({
-      rowNumber: index + 2, email: String(row[0] || ''), entryAt: row[1], exitAt: row[2], closeReason: String(row[3] || ''),
+      rowNumber: index + 2, email: String(row[0] || ''), date: row[1], entryAt: row[2], exitAt: row[3], closeReason: String(row[4] || ''),
     }))
   }
 
@@ -190,14 +196,17 @@ export class FileService {
     }
     const sheet = workbook.worksheets[0]
     if (!sheet) throw new ValidationError('XLSX file is empty')
-    this.validateHeader([sheet.getCell(1, 1).text, sheet.getCell(1, 2).text, sheet.getCell(1, 3).text, sheet.getCell(1, 4).text])
+    this.validateHeader([
+      sheet.getCell(1, 1).text, sheet.getCell(1, 2).text, sheet.getCell(1, 3).text,
+      sheet.getCell(1, 4).text, sheet.getCell(1, 5).text,
+    ])
     const rows: RawImportRow[] = []
     for (let number = 2; number <= sheet.rowCount; number++) {
       const row = sheet.getRow(number)
       if (!row.hasValues) continue
       rows.push({
-        rowNumber: number, email: row.getCell(1).text.trim(), entryAt: xlsxDateTimeValue(row.getCell(2).value),
-        exitAt: xlsxDateTimeValue(row.getCell(3).value), closeReason: row.getCell(4).text.trim(),
+        rowNumber: number, email: row.getCell(1).text.trim(), date: xlsxDateValue(row.getCell(2).value),
+        entryAt: xlsxTimeValue(row.getCell(3).value), exitAt: xlsxTimeValue(row.getCell(4).value), closeReason: row.getCell(5).text.trim(),
       })
     }
     return rows
@@ -205,14 +214,21 @@ export class FileService {
 
   private validateHeader(header: unknown[]): void {
     const values = header.map((value) => String(value || '').trim().toLowerCase())
-    if (values[0] !== 'email' || values[1] !== 'entry_at' || values[2] !== 'exit_at') {
-      throw new ValidationError('Invalid header. Expected: email,entry_at,exit_at,close_reason')
+    if (
+      values[0] !== 'email' || values[1] !== 'date' || values[2] !== 'entry_at'
+      || values[3] !== 'exit_at' || values[4] !== 'close_reason'
+    ) {
+      throw new ValidationError('Invalid header. Expected: email,date,entry_at,exit_at,close_reason')
     }
   }
 
-  private parseInstant(value: unknown, field: string): Date {
+  private parseInstant(date: unknown, time: unknown, field: string): Date {
     try {
-      return brazilianDateTimeToInstant(String(value || '').trim(), this.timeZone)
+      const dateText = String(date || '').trim()
+      const timeText = String(time || '').trim()
+      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateText)) throw new Error('date must follow format DD/MM/YYYY')
+      if (!/^\d{2}:\d{2}$/.test(timeText)) throw new Error('must follow format HH:mm (24-hour)')
+      return brazilianDateTimeToInstant(`${dateText} ${timeText}`, this.timeZone)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'must be a valid date and time'
       throw new ValidationError(`${field} ${message}`)

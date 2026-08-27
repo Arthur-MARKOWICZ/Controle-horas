@@ -156,9 +156,9 @@ integration('Fastify with PostgreSQL', () => {
     })
     expect(created.statusCode).toBe(201)
     const boundary = '----controle-horas-smoke-boundary'
-    const csv = `email,entry_at,exit_at,close_reason\n`
-      + `${childEmail},05/01/2026 08:00,05/01/2026 17:00,EXIT\n`
-      + `${childEmail},05/01/2026 08:00,05/01/2026 17:00,EXIT\n`
+    const csv = `email,date,entry_at,exit_at,close_reason\n`
+      + `${childEmail},05/01/2026,08:00,17:00,EXIT\n`
+      + `${childEmail},05/01/2026,08:00,17:00,EXIT\n`
     const multipart = Buffer.from(
       `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="smoke.csv"\r\n`
       + `Content-Type: text/csv\r\n\r\n${csv}\r\n--${boundary}--\r\n`,
@@ -241,8 +241,8 @@ integration('Fastify with PostgreSQL', () => {
     })).statusCode).toBe(200)
 
     const boundary = '----controle-horas-reimport-boundary'
-    const csv = 'email,entry_at,exit_at,close_reason\n'
-      + 'adjustments-employee@example.com,13/07/2026 07:30,13/07/2026 16:30,EXIT\n'
+    const csv = 'email,date,entry_at,exit_at,close_reason\n'
+      + 'adjustments-employee@example.com,13/07/2026,07:30,16:30,EXIT\n'
     const multipart = Buffer.from(
       `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="reimport.csv"\r\n`
       + `Content-Type: text/csv\r\n\r\n${csv}\r\n--${boundary}--\r\n`,
