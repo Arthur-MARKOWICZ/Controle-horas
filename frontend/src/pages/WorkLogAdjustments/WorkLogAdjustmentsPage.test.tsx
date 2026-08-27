@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WorkLogAdjustmentsPage from './WorkLogAdjustmentsPage'
@@ -46,9 +47,11 @@ describe('WorkLogAdjustmentsPage', () => {
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
   })
 
+  const renderPage = () => render(<MemoryRouter><WorkLogAdjustmentsPage /></MemoryRouter>)
+
   it('recalculates and refreshes the selected user hour bank', async () => {
     const user = userEvent.setup()
-    render(<WorkLogAdjustmentsPage />)
+    renderPage()
 
     await user.click(await screen.findByRole('button', { name: 'Recalcular banco de horas' }))
 
@@ -59,7 +62,7 @@ describe('WorkLogAdjustmentsPage', () => {
 
   it('recalculates and refreshes the selected worked day totals', async () => {
     const user = userEvent.setup()
-    render(<WorkLogAdjustmentsPage />)
+    renderPage()
 
     await user.click(await screen.findByRole('button', { name: 'Recalcular totais de dias' }))
 
@@ -69,7 +72,7 @@ describe('WorkLogAdjustmentsPage', () => {
 
   it('lets managers recalculate but does not show administrative work-log actions', async () => {
     useAuthMock.mockReturnValue({ isAdmin: false })
-    render(<WorkLogAdjustmentsPage />)
+    renderPage()
 
     expect(await screen.findByRole('button', { name: 'Recalcular banco de horas' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Criar registro' })).not.toBeInTheDocument()
@@ -79,7 +82,7 @@ describe('WorkLogAdjustmentsPage', () => {
 
   it('confirms and deletes a closed work log', async () => {
     const user = userEvent.setup()
-    render(<WorkLogAdjustmentsPage />)
+    renderPage()
 
     const deleteButton = await screen.findByRole('button', { name: 'Excluir' })
     await user.click(deleteButton)
@@ -93,7 +96,7 @@ describe('WorkLogAdjustmentsPage', () => {
   it('loads the selected adjustment page', async () => {
     const user = userEvent.setup()
     const range = getCurrentMonthRange()
-    render(<WorkLogAdjustmentsPage />)
+    renderPage()
 
     await user.click(await screen.findByRole('button', { name: 'Próxima' }))
 
@@ -104,7 +107,7 @@ describe('WorkLogAdjustmentsPage', () => {
 
   it('loads imported records from the selected period', async () => {
     const user = userEvent.setup()
-    render(<WorkLogAdjustmentsPage />)
+    renderPage()
 
     await user.clear(await screen.findByLabelText('Data inicial'))
     await user.type(screen.getByLabelText('Data inicial'), '2026-07-01')
@@ -115,5 +118,10 @@ describe('WorkLogAdjustmentsPage', () => {
     await waitFor(() => {
       expect(getUserHistoryMock).toHaveBeenLastCalledWith('user-1', '2026-07-01', '2026-07-31', 10, 0)
     })
+  })
+
+  it('links to the outside-schedule work days page', async () => {
+    renderPage()
+    expect(await screen.findByRole('link', { name: 'Ver dias fora da jornada' })).toHaveAttribute('href', '/settings/work-logs/outside-schedule')
   })
 })

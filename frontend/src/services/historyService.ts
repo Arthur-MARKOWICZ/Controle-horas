@@ -1,5 +1,5 @@
 import { apiBlob, apiRequest } from './api'
-import type { AdministrativeWorkLogPayload, ApiResponse, HistoryData, HourBankRecalculation, WorkedDayTotals, WorkLog } from '../types/api'
+import type { AdministrativeWorkLogPayload, ApiResponse, HistoryData, HourBankRecalculation, OutsideScheduleWorkDaysData, WorkedDayTotals, WorkLog } from '../types/api'
 import { triggerBrowserDownload } from './migrationService'
 
 const periodQuery = (startDate: string, endDate: string) => `startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
@@ -18,6 +18,8 @@ export const recalculateUserHourBank = (userId: string): Promise<ApiResponse<Hou
   apiRequest(`/api/users/${userId}/hour-bank/recalculate`, { method: 'POST' })
 export const recalculateUserWorkedDays = (userId: string): Promise<ApiResponse<WorkedDayTotals>> =>
   apiRequest(`/api/users/${userId}/worked-days/recalculate`, { method: 'POST' })
+export const getUserOutsideScheduleWorkDays = (userId: string, limit = 10, offset = 0): Promise<ApiResponse<OutsideScheduleWorkDaysData>> =>
+  apiRequest(`/api/users/${userId}/outside-schedule-work-days?limit=${limit}&offset=${offset}`)
 export const exportExcel = (startDate: string, endDate: string): Promise<Blob> => apiBlob(`/api/history/export.xlsx?${periodQuery(startDate, endDate)}`)
 export const exportPdf = (startDate: string, endDate: string): Promise<Blob> => apiBlob(`/api/history/export.pdf?${periodQuery(startDate, endDate)}`)
 export const downloadHistoryFile = (blob: Blob, filename: string): void => triggerBrowserDownload(blob, filename)

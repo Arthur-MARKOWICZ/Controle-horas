@@ -345,4 +345,33 @@ describe('HistoryService characterization', () => {
 
     expect(result.hourBankMinutes).toBe(598)
   })
+  it('lists closed days outside the schedule using the historical schedule version', async () => {
+    const saturday = workLog('2026-08-15T11:00:00Z', '2026-08-15T20:00:00Z')
+    const monday = workLog('2026-08-17T11:00:00Z', '2026-08-17T20:00:00Z')
+    const result = await history({
+      findClosedWorkLogs: vi.fn().mockResolvedValue([saturday, monday]),
+      findWorkScheduleVersions: vi.fn().mockResolvedValue([
+        { effectiveFrom: '0001-01-01', workDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'] },
+      ]),
+    }).outsideScheduleDays(user())
+
+    expect(result).toEqual({
+      days: [{ date: '2026-08-15', workedMinutes: 540, workLogs: [expect.objectContaining({ id: saturday.id })] }],
+      pagination: { limit: 10, offset: 0, total: 1 },
+    })
+  })
+  it('splits a closed interval that crosses midnight into both outside-schedule dates', async () => {
+    const crossingMidnight = workLog('2026-08-16T02:30:00Z', '2026-08-16T04:30:00Z')
+    const result = await history({
+      findClosedWorkLogs: vi.fn().mockResolvedValue([crossingMidnight]),
+      findWorkScheduleVersions: vi.fn().mockResolvedValue([
+        { effectiveFrom: '0001-01-01', workDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'] },
+      ]),
+    }).outsideScheduleDays(user())
+
+    expect(result.days).toEqual([
+      expect.objectContaining({ date: '2026-08-16', workedMinutes: 90 }),
+      expect.objectContaining({ date: '2026-08-15', workedMinutes: 30 }),
+    ])
+  })
 })

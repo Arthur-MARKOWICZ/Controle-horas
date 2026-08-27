@@ -28,6 +28,17 @@ export interface HourBankRecalculationResponse {
   hourBankMinutes: number
 }
 
+export interface OutsideScheduleWorkDayResponse {
+  date: string
+  workedMinutes: number
+  workLogs: WorkLogResponse[]
+}
+
+export interface OutsideScheduleWorkDaysResponse {
+  days: OutsideScheduleWorkDayResponse[]
+  pagination: { limit: number; offset: number; total: number }
+}
+
 export function workLogResponse(log: WorkLog): WorkLogResponse {
   return {
     id: log.id,

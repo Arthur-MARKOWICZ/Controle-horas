@@ -21,6 +21,8 @@ export interface HistoryDay {
   pausedMinutes: number; balanceMinutes: number; isComplete: boolean; workLogs: WorkLog[]
 }
 export interface WorkedDayTotals { total: number; inSchedule: number; outsideSchedule: number }
+export interface OutsideScheduleWorkDay { date: string; workedMinutes: number; workLogs: WorkLog[] }
+export interface OutsideScheduleWorkDaysData { days: OutsideScheduleWorkDay[]; pagination: { limit: number; offset: number; total: number } }
 export interface HistoryData {
   startDate: string; endDate: string; totalWorkedMinutes: number; totalBalanceMinutes: number
   hourBankMinutes: number; workedDayTotals: WorkedDayTotals; days: HistoryDay[]; pagination?: { limit: number; offset: number; total: number }

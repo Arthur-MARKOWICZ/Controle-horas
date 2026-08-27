@@ -282,7 +282,6 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
     await users.requireAccess(actor(request), request.params.userId), request.query.startDate, request.query.endDate,
     integerQuery(request.query.limit, 90), integerQuery(request.query.offset, 0),
   )))
-
   const requireAdminWorkLogAccess = async (request: FastifyRequest<{ Params: { userId: string } }>): Promise<User> => {
     await authenticate(request)
     if (actor(request).role !== 'ADMIN') throw new ForbiddenError('Only administrators can adjust work logs')
@@ -295,6 +294,11 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
     }
     return users.requireAccess(actor(request), request.params.userId)
   }
+  app.get<{ Params: { userId: string }; Querystring: { limit?: string; offset?: string } }>('/api/users/:userId/outside-schedule-work-days', {
+    preHandler: requireHourBankRecalculationAccess, schema: { params: idParams() },
+  }, async (request) => ok('Outside schedule work days retrieved successfully', await history.outsideScheduleDays(
+    await users.requireAccess(actor(request), request.params.userId), integerQuery(request.query.limit, 10), integerQuery(request.query.offset, 0),
+  )))
   app.post<{ Params: { userId: string } }>('/api/users/:userId/hour-bank/recalculate', {
     preHandler: requireHourBankRecalculationAccess, schema: { params: idParams() },
   }, async (request) => ok('Hour bank recalculated successfully', await workLogs.recalculateHourBank(

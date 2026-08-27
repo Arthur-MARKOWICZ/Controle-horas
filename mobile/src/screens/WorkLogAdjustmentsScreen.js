@@ -31,7 +31,7 @@ function inputValue(instant) {
 
 function instant(value) { return new Date(`${value.replace(' ', 'T')}:00-03:00`).toISOString() }
 
-export default function WorkLogAdjustmentsScreen() {
+export default function WorkLogAdjustmentsScreen({ navigation }) {
   const { theme } = useTheme()
   const [users, setUsers] = useState([])
   const [userId, setUserId] = useState('')
@@ -184,6 +184,7 @@ export default function WorkLogAdjustmentsScreen() {
       <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>Dias trabalhados</Text>
       <Text style={{ color: theme.muted }}>Recalcula os totais absolutos dentro e fora da jornada.</Text>
       <Button title={saving ? 'Recalculando...' : 'Recalcular totais de dias'} disabled={saving || loading || !userId} onPress={() => void recalculateWorkedDays()} />
+      <Button title="Ver dias fora da jornada" variant="secondary" disabled={saving} onPress={() => navigation.navigate('Dias fora da jornada')} />
     </Card>
     <Card>
       <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>Período dos registros</Text>

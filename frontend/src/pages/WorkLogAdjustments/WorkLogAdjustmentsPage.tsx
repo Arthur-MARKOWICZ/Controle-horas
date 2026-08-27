@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import MainLayout from '../../layouts/MainLayout'
 import { useAuth } from '../../hooks/useAuth'
 import { useUsers } from '../../hooks/useUsers'
@@ -182,6 +183,7 @@ function WorkLogAdjustmentsPage() {
         <div><h2>Dias trabalhados</h2><p className={styles.hint}>Recalcula os totais absolutos de dias dentro e fora da jornada.</p></div>
         <button type="button" disabled={submitting || loadingHistory || !userId} onClick={() => void recalculateWorkedDays()}>{submitting ? 'Recalculando...' : 'Recalcular totais de dias'}</button>
       </div>
+      <Link className={styles.secondaryButton} to="/settings/work-logs/outside-schedule">Ver dias fora da jornada</Link>
     </section>
     <section className={styles.card} aria-label="Filtro de período">
       <form className={styles.filterForm} onSubmit={applyFilter}>

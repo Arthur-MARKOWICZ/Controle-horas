@@ -101,6 +101,8 @@ export interface ImportedWorkLog {
   rowNumber: number; userId: string; entryAt: Date; exitAt: Date; closeReason: CloseReason
 }
 
+export interface WorkScheduleVersion { effectiveFrom: string; workDays: WorkDay[] }
+
 export class Repositories {
   constructor(readonly pool: Pool) {}
 
@@ -369,6 +371,22 @@ export class Repositories {
       [userId, start, end],
     )
     return result.rows.map(mapWorkLog)
+  }
+
+  async findClosedWorkLogs(userId: string): Promise<WorkLog[]> {
+    const result = await this.pool.query<WorkLogRow>(
+      `SELECT id,user_id,entry_at,exit_at,close_reason,created_at,updated_at FROM work_logs
+       WHERE user_id=$1 AND exit_at IS NOT NULL ORDER BY entry_at ASC`, [userId],
+    )
+    return result.rows.map(mapWorkLog)
+  }
+
+  async findWorkScheduleVersions(userId: string): Promise<WorkScheduleVersion[]> {
+    const result = await this.pool.query<{ effective_from: string; work_days: string }>(
+      `SELECT effective_from::TEXT,work_days FROM user_work_schedule_versions
+       WHERE user_id=$1 ORDER BY effective_from ASC`, [userId],
+    )
+    return result.rows.map((row) => ({ effectiveFrom: row.effective_from, workDays: normalizeWorkDays(row.work_days) }))
   }
 
   async findFirstWorkLog(userId: string): Promise<WorkLog | null> {

@@ -13,6 +13,7 @@ const UsersPage = lazy(() => import('../pages/Users/UsersPage'))
 const ImportPage = lazy(() => import('../pages/Import/ImportPage'))
 const ScheduleSettingsPage = lazy(() => import('../pages/ScheduleSettings/ScheduleSettingsPage'))
 const WorkLogAdjustmentsPage = lazy(() => import('../pages/WorkLogAdjustments/WorkLogAdjustmentsPage'))
+const OutsideScheduleWorkDaysPage = lazy(() => import('../pages/OutsideScheduleWorkDays/OutsideScheduleWorkDaysPage'))
 const AccountPage = lazy(() => import('../pages/Account/AccountPage'))
 const ResetPasswordPage = lazy(() => import('../pages/ResetPassword/ResetPasswordPage'))
 
@@ -37,6 +38,7 @@ function AppRoutes() {
     </Route>
     <Route element={<RoleRoute allowedRoles={['ADMIN', 'MANAGER']} />}>
       <Route path="/settings/work-logs" element={<WorkLogAdjustmentsPage />} />
+      <Route path="/settings/work-logs/outside-schedule" element={<OutsideScheduleWorkDaysPage />} />
     </Route>
     <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
       <Route path="/import" element={<ImportPage />} />

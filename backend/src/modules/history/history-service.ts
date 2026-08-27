@@ -1,11 +1,11 @@
 import type { Repositories } from '../../database/repositories.js'
-import type { HistoryDayResponse, HistoryResponse } from '../../domain/contracts.js'
+import type { HistoryDayResponse, HistoryResponse, OutsideScheduleWorkDaysResponse } from '../../domain/contracts.js'
 import { workLogResponse } from '../../domain/contracts.js'
-import type { User, WorkLog } from '../../domain/types.js'
+import type { User, WorkDay, WorkLog } from '../../domain/types.js'
 import { ValidationError } from '../../shared/errors.js'
 import {
-  addDays, daysBetween, eachDate, effectiveWorkload,
-  groupLogsByEntryDate, isDayComplete, localDateOf, localDateStart, minutesByDateIncludingOpen, pausedMinutes,
+  addDays, closedMinutesByDate, daysBetween, eachDate, effectiveWorkload,
+  groupLogsByEntryDate, isDayComplete, isWorkDay, localDateOf, localDateStart, minutesByDateIncludingOpen, pausedMinutes,
 } from '../../shared/time.js'
 import type { WorkTimeService } from '../work-logs/work-time-service.js'
 
@@ -44,6 +44,36 @@ export class HistoryService {
       startDate, endDate, totalWorkedMinutes, totalBalanceMinutes, hourBankMinutes, workedDayTotals: user.workedDayTotals,
       days: days.slice(offset, offset + limit), pagination: { limit, offset, total: days.length },
     }
+  }
+
+  async outsideScheduleDays(user: User, limit = 10, offset = 0): Promise<OutsideScheduleWorkDaysResponse> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 90) throw new ValidationError('limit must be between 1 and 90')
+    if (!Number.isInteger(offset) || offset < 0) throw new ValidationError('offset must be zero or greater')
+    const [logs, versions] = await Promise.all([
+      this.repositories.findClosedWorkLogs(user.id), this.repositories.findWorkScheduleVersions(user.id),
+    ])
+    const minutesByDate = closedMinutesByDate(logs, this.timeZone)
+    const dates = [...minutesByDate.keys()]
+      .filter((date) => !isWorkDay(date, this.workDaysAt(versions, date)))
+      .sort((left, right) => right.localeCompare(left))
+    const days = dates.slice(offset, offset + limit).map((date) => {
+      const start = localDateStart(date, this.timeZone)
+      const end = localDateStart(addDays(date, 1), this.timeZone)
+      return {
+        date, workedMinutes: minutesByDate.get(date) || 0,
+        workLogs: logs.filter((log) => log.entryAt < end && log.exitAt! > start).map(workLogResponse),
+      }
+    })
+    return { days, pagination: { limit, offset, total: dates.length } }
+  }
+
+  private workDaysAt(versions: Array<{ effectiveFrom: string; workDays: WorkDay[] }>, date: string): WorkDay[] {
+    let result: WorkDay[] = []
+    for (const version of versions) {
+      if (version.effectiveFrom > date) break
+      result = version.workDays
+    }
+    return result
   }
 
   private buildDays(
