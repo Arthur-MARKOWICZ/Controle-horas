@@ -4,7 +4,7 @@ import { useUsers } from '../../hooks/useUsers'
 import * as historyService from '../../services/historyService'
 import Pagination from '../../components/Pagination/Pagination'
 import { getErrorMessage } from '../../utils/errorMessage'
-import { getCurrentMonthRange, formatInstantTime, formatShortDate } from '../../utils/formatTime'
+import { formatInstantTime, formatShortDate, formatSignedDuration, getCurrentMonthRange } from '../../utils/formatTime'
 import type { HistoryData, WorkLog } from '../../types/api'
 import styles from './WorkLogAdjustmentsPage.module.css'
 
@@ -116,9 +116,10 @@ function WorkLogAdjustmentsPage() {
     try {
       const response = await historyService.deleteUserWorkLog(userId, log.id)
       if (!response.success) throw new Error(response.message || 'Não foi possível excluir o registro.')
-      setMessage('Registro excluído.')
       if (editing?.id === log.id) startCreate()
-      refreshHistory()
+      setOffset(0)
+      await loadHistory(userId, activeRange, 0)
+      setMessage('Registro excluído e banco de horas recalculado.')
     } catch (requestError) {
       setError(await getErrorMessage(requestError, 'Não foi possível excluir o registro.'))
     } finally { setSubmitting(false) }
@@ -164,6 +165,7 @@ function WorkLogAdjustmentsPage() {
     </section>
     <section className={styles.card}>
       <div className={styles.cardHeader}><h2>Registros de {activeRange.startDate} a {activeRange.endDate}</h2>{loadingHistory && <span>Carregando...</span>}</div>
+      {history && <p className={styles.hint}>Banco de horas atual: {formatSignedDuration(history.hourBankMinutes)}</p>}
       {!loadingHistory && logs.length === 0 && <p className={styles.hint}>Nenhum registro encontrado neste período.</p>}
       {logs.length > 0 && <div className={styles.tableWrapper}><table><thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th /></tr></thead><tbody>
         {logs.map(({ date, log }) => <tr key={`${date}-${log.id}`}><td>{formatShortDate(date)}</td><td>{formatInstantTime(log.entryAt)}</td><td>{formatInstantTime(log.exitAt)}</td><td><div className={styles.rowActions}><button className={styles.secondaryButton} type="button" disabled={!log.exitAt || submitting} onClick={() => startEdit(log)}>Editar</button><button className={styles.deleteButton} type="button" disabled={!log.exitAt || submitting} onClick={() => void remove(log)}>Excluir</button></div></td></tr>)}

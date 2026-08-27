@@ -402,6 +402,10 @@ export class Repositories {
     const client = await this.pool.connect()
     try {
       await client.query('BEGIN')
+      const userIds = [...new Set(rows.map((row) => row.userId))].sort()
+      for (const userId of userIds) {
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [userId])
+      }
       for (const row of rows) {
         const savepoint = `import_row_${row.rowNumber}`
         await client.query(`SAVEPOINT ${savepoint}`)

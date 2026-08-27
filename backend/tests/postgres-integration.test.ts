@@ -196,6 +196,12 @@ integration('Fastify with PostgreSQL', () => {
     expect(update.statusCode).toBe(200)
     expect(update.json().data).toMatchObject({ entryAt: '2026-07-13T10:30:00.000Z', exitAt: '2026-07-13T19:30:00.000Z' })
 
+    const historyBeforeDelete = await app.inject({
+      method: 'GET', url: `/api/users/${childId}/history?startDate=2026-07-13&endDate=2026-07-13`, headers: auth(admin.token),
+    })
+    expect(historyBeforeDelete.statusCode).toBe(200)
+    expect(historyBeforeDelete.json().data.hourBankMinutes).toBe(540)
+
     const deleted = await app.inject({
       method: 'DELETE', url: `/api/users/${childId}/work-logs/${workLogId}`, headers: auth(admin.token),
     })
@@ -205,6 +211,37 @@ integration('Fastify with PostgreSQL', () => {
       method: 'DELETE', url: `/api/users/${childId}/work-logs/${workLogId}`, headers: auth(admin.token),
     })
     expect(missing.statusCode).toBe(404)
+
+    const historyAfterDelete = await app.inject({
+      method: 'GET', url: `/api/users/${childId}/history?startDate=2026-07-13&endDate=2026-07-13`, headers: auth(admin.token),
+    })
+    expect(historyAfterDelete.statusCode).toBe(200)
+    expect(historyAfterDelete.json().data.hourBankMinutes).toBe(0)
+
+    const recreated = await app.inject({
+      method: 'POST', url: `/api/users/${childId}/work-logs`, headers: auth(admin.token),
+      payload: { entryAt: '2026-07-13T10:30:00.000Z', exitAt: '2026-07-13T19:30:00.000Z' },
+    })
+    expect(recreated.statusCode).toBe(200)
+    const recreatedId = recreated.json().data.id as string
+    expect((await app.inject({
+      method: 'DELETE', url: `/api/users/${childId}/work-logs/${recreatedId}`, headers: auth(admin.token),
+    })).statusCode).toBe(200)
+
+    const boundary = '----controle-horas-reimport-boundary'
+    const csv = 'email,entry_at,exit_at,close_reason\n'
+      + 'adjustments-employee@example.com,13/07/2026 07:30,13/07/2026 16:30,EXIT\n'
+    const multipart = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="reimport.csv"\r\n`
+      + `Content-Type: text/csv\r\n\r\n${csv}\r\n--${boundary}--\r\n`,
+    )
+    const reimported = await app.inject({
+      method: 'POST', url: '/api/migrations/import', headers: {
+        ...auth(admin.token), 'content-type': `multipart/form-data; boundary=${boundary}`,
+      }, payload: multipart,
+    })
+    expect(reimported.statusCode).toBe(200)
+    expect(reimported.json().data).toMatchObject({ importedCount: 1, errorCount: 0 })
 
     const employee = await app.inject({
       method: 'POST', url: '/api/auth/mobile/login', payload: { email: 'adjustments-employee@example.com', password: 'Password123' },

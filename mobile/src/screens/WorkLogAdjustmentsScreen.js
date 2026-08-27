@@ -5,6 +5,7 @@ import { Screen } from '../components/Screen'
 import { getUserHistory, createUserWorkLog, deleteUserWorkLog, updateUserWorkLog } from '../services/historyService'
 import { listUsers } from '../services/userService'
 import { errorMessage } from '../utils/errorMessage'
+import { formatSignedDuration } from '../utils/format'
 import { useTheme } from '../contexts/ThemeContext'
 
 const PAGE_SIZE = 10
@@ -136,12 +137,13 @@ export default function WorkLogAdjustmentsScreen() {
             setMessage('')
             const response = await deleteUserWorkLog(userId, log.id)
             if (!response.success) throw new Error(response.message)
-            setMessage('Registro excluído.')
             if (editing?.id === log.id) {
               setEditing(null)
               setForm({ entryAt: '', exitAt: '' })
             }
-            refreshHistory()
+            setOffset(0)
+            await load(userId, activeRange, 0)
+            setMessage('Registro excluído e banco de horas recalculado.')
           } catch (err) {
             setError(errorMessage(err))
           } finally {
@@ -179,6 +181,7 @@ export default function WorkLogAdjustmentsScreen() {
     <Notice message={error || message} type={error ? 'error' : 'success'} />
     <Card>
       <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>Registros de {activeRange.start} a {activeRange.end}</Text>
+      {history && <Text style={{ color: theme.muted }}>Banco de horas atual: {formatSignedDuration(history.hourBankMinutes)}</Text>}
       {loading && <Text style={{ color: theme.muted }}>Carregando registros...</Text>}
       {!loading && logs.length === 0 && <Text style={{ color: theme.muted }}>Nenhum registro encontrado neste período.</Text>}
       {logs.map(({ date, log }) => <View key={`${date}-${log.id}`} style={{ borderBottomWidth: 1, borderBottomColor: theme.border, paddingVertical: 10, gap: 5 }}><Text style={{ color: theme.text }}>{date}: {inputValue(log.entryAt)} — {log.exitAt ? inputValue(log.exitAt) : 'Em aberto'}</Text><View style={{ flexDirection: 'row', gap: 8 }}><Button title="Editar" variant="secondary" disabled={!log.exitAt || saving} onPress={() => edit(log)} /><Button title="Excluir" variant="secondary" disabled={!log.exitAt || saving} onPress={() => remove(log)} /></View></View>)}

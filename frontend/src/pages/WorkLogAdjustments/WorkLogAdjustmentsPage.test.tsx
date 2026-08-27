@@ -45,7 +45,8 @@ describe('WorkLogAdjustmentsPage', () => {
 
     expect(window.confirm).toHaveBeenCalledWith('Deseja excluir este registro de ponto? Esta ação não pode ser desfeita.')
     await waitFor(() => expect(deleteUserWorkLogMock).toHaveBeenCalledWith('user-1', 'log-1'))
-    expect(await screen.findByText('Registro excluído.')).toBeInTheDocument()
+    expect(await screen.findByText('Registro excluído e banco de horas recalculado.')).toBeInTheDocument()
+    expect(getUserHistoryMock).toHaveBeenCalledTimes(2)
   })
 
   it('loads the selected adjustment page', async () => {
