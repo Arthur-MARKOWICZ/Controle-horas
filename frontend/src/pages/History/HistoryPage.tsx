@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form'
 import MainLayout from '../../layouts/MainLayout'
 import { useHistory } from '../../hooks/useHistory'
+import Pagination from '../../components/Pagination/Pagination'
 import {
   formatShortDate,
   formatSignedDuration,
@@ -29,6 +30,10 @@ function HistoryPage() {
 
   const onSubmit = async ({ startDate: nextStartDate, endDate: nextEndDate }: HistoryFormValues) => {
     await loadHistory(nextStartDate, nextEndDate)
+  }
+
+  const changePage = async (offset: number) => {
+    await loadHistory(startDate, endDate, offset)
   }
 
   const validatePeriod = (start: string, end: string): true | string => {
@@ -140,7 +145,7 @@ function HistoryPage() {
               <div className={styles.tableHeader}>
                 <h2 id="history-title">Dias do período</h2>
                 <span>
-                  {history.days.length} {history.days.length === 1 ? 'dia' : 'dias'}
+                  {history.pagination?.total ?? history.days.length} {(history.pagination?.total ?? history.days.length) === 1 ? 'dia' : 'dias'}
                 </span>
               </div>
 
@@ -180,6 +185,7 @@ function HistoryPage() {
                   </table>
                 </div>
               )}
+              <Pagination pagination={history.pagination} disabled={isLoading || isExporting} onPageChange={(offset) => void changePage(offset)} />
             </section>
           </>
         )}

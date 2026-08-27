@@ -113,6 +113,36 @@ describe('HistoryPage', () => {
     })
   })
 
+  it('loads the selected history page', async () => {
+    const user = userEvent.setup()
+    const loadHistory = vi.fn()
+    useHistoryMock.mockReturnValue({
+      history: {
+        startDate: monthRange.startDate,
+        endDate: monthRange.endDate,
+        totalWorkedMinutes: 0,
+        totalBalanceMinutes: 0,
+        hourBankMinutes: 0,
+        days: [],
+        pagination: { limit: 10, offset: 0, total: 20 },
+      },
+      startDate: monthRange.startDate,
+      endDate: monthRange.endDate,
+      isLoading: false,
+      isExporting: false,
+      error: '',
+      exportError: '',
+      loadHistory,
+      exportHistory: vi.fn(),
+    })
+
+    renderHistory()
+
+    await user.click(screen.getByRole('button', { name: 'Próxima' }))
+
+    expect(loadHistory).toHaveBeenCalledWith(monthRange.startDate, monthRange.endDate, 10)
+  })
+
   it('shows loading and error states', () => {
     useHistoryMock.mockReturnValue({
       history: null,

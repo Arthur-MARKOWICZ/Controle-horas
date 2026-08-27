@@ -5,6 +5,7 @@ import { getCurrentMonthRange } from '../utils/formatTime'
 import type { HistoryData } from '../types/api'
 
 interface DateRange { startDate: string; endDate: string }
+const PAGE_SIZE = 10
 
 export function useHistory(initialRange: DateRange = getCurrentMonthRange()) {
   const [history, setHistory] = useState<HistoryData | null>(null)
@@ -16,11 +17,11 @@ export function useHistory(initialRange: DateRange = getCurrentMonthRange()) {
   const [exportError, setExportError] = useState('')
   const loadedRangeRef = useRef('')
 
-  const loadHistory = useCallback(async (nextStartDate: string, nextEndDate: string) => {
+  const loadHistory = useCallback(async (nextStartDate: string, nextEndDate: string, offset = 0) => {
     setIsLoading(true)
     setError('')
     try {
-      const response = await historyService.getHistory(nextStartDate, nextEndDate)
+      const response = await historyService.getHistory(nextStartDate, nextEndDate, PAGE_SIZE, offset)
       if (!response.success || !response.data) {
         throw new Error(response.message || 'Unable to load history')
       }

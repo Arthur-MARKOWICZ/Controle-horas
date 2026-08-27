@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import MainLayout from '../../layouts/MainLayout'
 import { useUsers } from '../../hooks/useUsers'
 import * as historyService from '../../services/historyService'
+import Pagination from '../../components/Pagination/Pagination'
 import { getErrorMessage } from '../../utils/errorMessage'
 import { getCurrentMonthRange, formatInstantTime, formatShortDate } from '../../utils/formatTime'
 import type { HistoryData, WorkLog } from '../../types/api'
 import styles from './WorkLogAdjustmentsPage.module.css'
 
 interface FormValues { entryAt: string; exitAt: string }
+const PAGE_SIZE = 10
 
 function toDateTimeInput(value: string): string {
   const parts = new Intl.DateTimeFormat('sv-SE', {
@@ -30,25 +32,37 @@ function WorkLogAdjustmentsPage() {
   const [message, setMessage] = useState('')
   const [editing, setEditing] = useState<WorkLog | null>(null)
   const [form, setForm] = useState<FormValues>({ entryAt: '', exitAt: '' })
+  const [offset, setOffset] = useState(0)
+  const [reloadVersion, setReloadVersion] = useState(0)
   const range = useMemo(() => getCurrentMonthRange(), [])
 
   useEffect(() => {
     if (!userId && users.length) setUserId(users[0]!.id)
   }, [userId, users])
 
-  const loadHistory = async (targetId: string) => {
+  const loadHistory = useCallback(async (targetId: string, nextOffset: number) => {
     if (!targetId) return
     setLoadingHistory(true); setError('')
     try {
-      const response = await historyService.getUserHistory(targetId, range.startDate, range.endDate)
+      const response = await historyService.getUserHistory(targetId, range.startDate, range.endDate, PAGE_SIZE, nextOffset)
       if (!response.success || !response.data) throw new Error(response.message || 'Não foi possível carregar os registros.')
       setHistory(response.data)
     } catch (requestError) {
       setHistory(null); setError(await getErrorMessage(requestError, 'Não foi possível carregar os registros.'))
     } finally { setLoadingHistory(false) }
+  }, [range.endDate, range.startDate])
+
+  useEffect(() => { void loadHistory(userId, offset) }, [loadHistory, offset, reloadVersion, userId])
+
+  const selectUser = (nextUserId: string) => {
+    setOffset(0)
+    setUserId(nextUserId)
   }
 
-  useEffect(() => { void loadHistory(userId) }, [userId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const refreshHistory = () => {
+    setOffset(0)
+    setReloadVersion((version) => version + 1)
+  }
 
   const startCreate = () => { setEditing(null); setForm({ entryAt: '', exitAt: '' }); setMessage('') }
   const startEdit = (log: WorkLog) => {
@@ -68,7 +82,7 @@ function WorkLogAdjustmentsPage() {
       setMessage(editing ? 'Registro atualizado.' : 'Registro criado.')
       setEditing(null)
       setForm({ entryAt: '', exitAt: '' })
-      await loadHistory(userId)
+      refreshHistory()
     } catch (requestError) {
       setError(await getErrorMessage(requestError, 'Não foi possível salvar o registro.'))
     } finally { setSubmitting(false) }
@@ -82,7 +96,7 @@ function WorkLogAdjustmentsPage() {
       if (!response.success) throw new Error(response.message || 'Não foi possível excluir o registro.')
       setMessage('Registro excluído.')
       if (editing?.id === log.id) startCreate()
-      await loadHistory(userId)
+      refreshHistory()
     } catch (requestError) {
       setError(await getErrorMessage(requestError, 'Não foi possível excluir o registro.'))
     } finally { setSubmitting(false) }
@@ -97,7 +111,7 @@ function WorkLogAdjustmentsPage() {
     </header>
     <section className={styles.card}>
       <label htmlFor="adjustment-user">Usuário
-        <select id="adjustment-user" value={userId} disabled={loadingUsers || submitting} onChange={(event) => setUserId(event.target.value)}>
+        <select id="adjustment-user" value={userId} disabled={loadingUsers || submitting} onChange={(event) => selectUser(event.target.value)}>
           {users.map((user) => <option key={user.id} value={user.id}>{user.name} — {user.email}</option>)}
         </select>
       </label>
@@ -119,6 +133,7 @@ function WorkLogAdjustmentsPage() {
       {logs.length > 0 && <div className={styles.tableWrapper}><table><thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th /></tr></thead><tbody>
         {logs.map(({ date, log }) => <tr key={`${date}-${log.id}`}><td>{formatShortDate(date)}</td><td>{formatInstantTime(log.entryAt)}</td><td>{formatInstantTime(log.exitAt)}</td><td><div className={styles.rowActions}><button className={styles.secondaryButton} type="button" disabled={!log.exitAt || submitting} onClick={() => startEdit(log)}>Editar</button><button className={styles.deleteButton} type="button" disabled={!log.exitAt || submitting} onClick={() => void remove(log)}>Excluir</button></div></td></tr>)}
       </tbody></table></div>}
+      <Pagination pagination={history?.pagination} disabled={loadingHistory || submitting} onPageChange={setOffset} />
     </section>
   </main></MainLayout>
 }

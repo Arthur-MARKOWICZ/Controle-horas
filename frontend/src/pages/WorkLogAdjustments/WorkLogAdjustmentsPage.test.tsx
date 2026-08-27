@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WorkLogAdjustmentsPage from './WorkLogAdjustmentsPage'
+import { getCurrentMonthRange } from '../../utils/formatTime'
 
 const useUsersMock = vi.fn()
 const getUserHistoryMock = vi.fn()
@@ -19,6 +20,7 @@ vi.mock('../../services/historyService', () => ({
 
 describe('WorkLogAdjustmentsPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     useUsersMock.mockReturnValue({
       users: [{ id: 'user-1', name: 'Ana', email: 'ana@example.com' }], isLoading: false, error: '',
     })
@@ -27,6 +29,7 @@ describe('WorkLogAdjustmentsPage', () => {
       data: {
         startDate: '2026-08-01', endDate: '2026-08-31', totalWorkedMinutes: 480, totalBalanceMinutes: 0, hourBankMinutes: 0,
         days: [{ date: '2026-08-10', workLogs: [{ id: 'log-1', entryAt: '2026-08-10T11:00:00.000Z', exitAt: '2026-08-10T20:00:00.000Z', closeReason: 'EXIT' }] }],
+        pagination: { limit: 10, offset: 0, total: 11 },
       },
     })
     deleteUserWorkLogMock.mockResolvedValue({ success: true, message: 'Work log deleted successfully', data: null })
@@ -43,5 +46,17 @@ describe('WorkLogAdjustmentsPage', () => {
     expect(window.confirm).toHaveBeenCalledWith('Deseja excluir este registro de ponto? Esta ação não pode ser desfeita.')
     await waitFor(() => expect(deleteUserWorkLogMock).toHaveBeenCalledWith('user-1', 'log-1'))
     expect(await screen.findByText('Registro excluído.')).toBeInTheDocument()
+  })
+
+  it('loads the selected adjustment page', async () => {
+    const user = userEvent.setup()
+    const range = getCurrentMonthRange()
+    render(<WorkLogAdjustmentsPage />)
+
+    await user.click(await screen.findByRole('button', { name: 'Próxima' }))
+
+    await waitFor(() => {
+      expect(getUserHistoryMock).toHaveBeenLastCalledWith('user-1', range.startDate, range.endDate, 10, 10)
+    })
   })
 })
