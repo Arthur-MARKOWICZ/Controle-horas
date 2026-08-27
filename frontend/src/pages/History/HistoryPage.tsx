@@ -48,10 +48,6 @@ function HistoryPage() {
     if (startTime > endTime) {
       return 'A data inicial deve ser menor ou igual à data final.'
     }
-    const diffDays = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60 * 24))
-    if (diffDays > 90) {
-      return 'O período deve ter no máximo 90 dias.'
-    }
     return true
   }
 

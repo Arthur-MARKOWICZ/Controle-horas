@@ -4,13 +4,12 @@ import { workLogResponse } from '../../domain/contracts.js'
 import type { User, WorkDay, WorkLog } from '../../domain/types.js'
 import { ValidationError } from '../../shared/errors.js'
 import {
-  addDays, closedMinutesByDate, daysBetween, eachDate, effectiveWorkload,
+  addDays, closedMinutesByDate, eachDate, effectiveWorkload,
   groupLogsByEntryDate, isDayComplete, isWorkDay, localDateOf, localDateStart, minutesByDateIncludingOpen, pausedMinutes,
 } from '../../shared/time.js'
 import type { WorkTimeService } from '../work-logs/work-time-service.js'
 
 export class HistoryService {
-  static readonly MAX_PERIOD_DAYS = 90
   constructor(
     private readonly repositories: Repositories,
     private readonly workTime: WorkTimeService,
@@ -119,8 +118,5 @@ export class HistoryService {
       throw new ValidationError('startDate and endDate are required in YYYY-MM-DD format.')
     }
     if (start > end) throw new ValidationError('startDate must be less than or equal to endDate.')
-    if (daysBetween(start, end) > HistoryService.MAX_PERIOD_DAYS) {
-      throw new ValidationError(`Period must be at most ${HistoryService.MAX_PERIOD_DAYS} days.`)
-    }
   }
 }

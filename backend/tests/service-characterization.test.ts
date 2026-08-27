@@ -317,8 +317,10 @@ describe('HistoryService characterization', () => {
   it('rejects reversed periods', async () => {
     await expect(history().get(user(), '2026-07-15', '2026-07-14')).rejects.toMatchObject({ statusCode: 400 })
   })
-  it('rejects periods longer than 90 days', async () => {
-    await expect(history().get(user(), '2026-01-01', '2026-04-02')).rejects.toMatchObject({ statusCode: 400 })
+  it('accepts periods longer than 90 days', async () => {
+    await expect(history().get(user(), '2026-01-01', '2026-04-02')).resolves.toMatchObject({
+      startDate: '2026-01-01', endDate: '2026-04-02',
+    })
   })
   it('adds absences for past configured work days', async () => {
     const result = await history().get(user({ workStartDate: '2026-07-13' }), '2026-07-13', '2026-07-13', 90, 0, now)

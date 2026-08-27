@@ -116,6 +116,26 @@ describe('HistoryPage', () => {
     })
   })
 
+  it('accepts a period longer than 90 days', async () => {
+    const user = userEvent.setup()
+    const loadHistory = vi.fn()
+    useHistoryMock.mockReturnValue({
+      history: null, startDate: monthRange.startDate, endDate: monthRange.endDate,
+      isLoading: false, isExporting: false, error: '', exportError: '', loadHistory, exportHistory: vi.fn(),
+    })
+    renderHistory()
+
+    await user.clear(screen.getByLabelText('Data inicial'))
+    await user.type(screen.getByLabelText('Data inicial'), '2026-01-01')
+    await user.clear(screen.getByLabelText('Data final'))
+    await user.type(screen.getByLabelText('Data final'), '2026-05-01')
+    await user.click(screen.getByRole('button', { name: 'Filtrar' }))
+
+    await waitFor(() => {
+      expect(loadHistory).toHaveBeenCalledWith('2026-01-01', '2026-05-01')
+    })
+  })
+
   it('blocks an inverted or malformed period with a clear Portuguese error', async () => {
     const user = userEvent.setup()
     const loadHistory = vi.fn()

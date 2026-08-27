@@ -28,7 +28,7 @@ function toInstant(value: string): string { return new Date(`${value}:00-03:00`)
 function isValidPeriod(startDate: string, endDate: string): boolean {
   const start = new Date(`${startDate}T00:00:00`)
   const end = new Date(`${endDate}T00:00:00`)
-  return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && start <= end && (end.getTime() - start.getTime()) / 86_400_000 <= 90
+  return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && start <= end
 }
 
 function WorkLogAdjustmentsPage() {
@@ -81,7 +81,7 @@ function WorkLogAdjustmentsPage() {
   const applyFilter = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!isValidPeriod(startDate, endDate)) {
-      setFilterError('O período deve ser válido e ter até 90 dias.')
+      setFilterError('O período deve ser válido, com a data inicial menor ou igual à data final.')
       return
     }
     setFilterError('')
@@ -195,7 +195,7 @@ function WorkLogAdjustmentsPage() {
         </label>
         <div className={styles.filterActions}><button type="submit" disabled={loadingHistory || submitting || !userId}>{loadingHistory ? 'Carregando...' : 'Filtrar registros'}</button></div>
       </form>
-      <p className={styles.hint}>Escolha um período de até 90 dias para localizar registros importados ou ajustar lançamentos anteriores.</p>
+      <p className={styles.hint}>Escolha o período para localizar registros importados ou ajustar lançamentos anteriores.</p>
       {filterError && <p className={styles.error} role="alert">{filterError}</p>}
     </section>
     {isAdmin && <section className={styles.card}>

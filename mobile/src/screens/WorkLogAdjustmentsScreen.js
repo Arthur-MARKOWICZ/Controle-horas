@@ -20,7 +20,7 @@ function currentMonth() {
 function isValidPeriod(start, end) {
   const startDate = new Date(`${start}T00:00:00`)
   const endDate = new Date(`${end}T00:00:00`)
-  return !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && startDate <= endDate && (endDate - startDate) / 86400000 <= 90
+  return !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && startDate <= endDate
 }
 
 function inputValue(instant) {
@@ -76,7 +76,7 @@ export default function WorkLogAdjustmentsScreen({ navigation }) {
 
   const applyFilters = () => {
     if (!isValidPeriod(filters.start, filters.end)) {
-      setError('O período deve ser válido e ter até 90 dias.')
+      setError('O período deve ser válido, com a data inicial menor ou igual à data final.')
       return
     }
     setError('')

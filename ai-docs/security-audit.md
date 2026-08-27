@@ -117,14 +117,14 @@ A aplicação possui boas práticas em alguns pontos (BCrypt, JWT via variáveis
 | **Descrição** | Multipart máx. 2MB; validação de magic bytes CSV/XLSX; limite de 5000 linhas. |
 | **Onde** | `application.yml`, `WorkLogImportService.java` |
 
-### 10. Histórico sem limite de período — **Mitigado**
+### 10. Histórico sem limite de período — **Aceito**
 
 | Campo | Detalhe |
 |-------|---------|
 | **Severidade** | Média |
-| **Status** | Mitigado |
-| **Descrição** | Período máximo de 90 dias no backend e validação correspondente no frontend. |
-| **Onde** | `HistoryService.java`, `HistoryPage.jsx` |
+| **Status** | Aceito |
+| **Descrição** | Não há limite de período a pedido do produto. A resposta de consulta permanece paginada, com no máximo 90 dias por página. |
+| **Onde** | `backend/src/modules/history/history-service.ts`, telas de histórico e ajustes de ponto |
 
 ### 11. Headers HTTP de segurança ausentes — **Mitigado**
 
