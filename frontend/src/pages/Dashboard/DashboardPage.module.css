@@ -159,6 +159,17 @@ input:disabled {
   min-height: 2.75rem;
 }
 
+.holidayNotice {
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.holidayNotice strong { font-weight: 600; }
+.holidayNotice span { color: var(--color-text-muted); }
+
 .notificationBanner {
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-text);

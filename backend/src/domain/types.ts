@@ -7,6 +7,27 @@ export type CloseReason = typeof CLOSE_REASONS[number]
 export const WORK_DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] as const
 export type WorkDay = typeof WORK_DAYS[number]
 
+export const HOLIDAY_SCOPES = ['NATIONAL', 'SUBDIVISION', 'MUNICIPAL', 'COMPANY'] as const
+export type HolidayScope = typeof HOLIDAY_SCOPES[number]
+
+export const HOLIDAY_DAY_KINDS = ['HOLIDAY', 'OBSERVED', 'BRIDGE'] as const
+/** HOLIDAY: the holiday itself. OBSERVED: the date its day off was moved to. BRIDGE: an extra day off next to it. */
+export type HolidayDayKind = typeof HOLIDAY_DAY_KINDS[number]
+
+export const HOLIDAY_SOURCES = ['NAGER', 'MANUAL'] as const
+export type HolidaySource = typeof HOLIDAY_SOURCES[number]
+
+export interface Holiday {
+  id: string
+  organizationId: string | null
+  countryCode: string
+  subdivisionCode: string | null
+  date: string
+  name: string
+  scope: HolidayScope
+  source: HolidaySource
+}
+
 export interface User {
   id: string
   name: string

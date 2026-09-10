@@ -1,8 +1,10 @@
 import type { Repositories } from '../../database/repositories.js'
 import type { HistoryDayResponse, HistoryResponse, OutsideScheduleWorkDaysResponse } from '../../domain/contracts.js'
-import { workLogResponse } from '../../domain/contracts.js'
+import { holidayResponse, workLogResponse } from '../../domain/contracts.js'
 import type { User, WorkDay, WorkLog } from '../../domain/types.js'
 import { ValidationError } from '../../shared/errors.js'
+import type { HolidayCalendar, HolidayCalendarSource } from '../../shared/holiday-calendar.js'
+import { NO_HOLIDAY_CALENDAR } from '../../shared/holiday-calendar.js'
 import {
   addDays, closedMinutesByDate, eachDate, effectiveWorkload,
   groupLogsByEntryDate, isDayComplete, isWorkDay, localDateOf, localDateStart, minutesByDateIncludingOpen, pausedMinutes,
@@ -14,6 +16,7 @@ export class HistoryService {
     private readonly repositories: Repositories,
     private readonly workTime: WorkTimeService,
     private readonly timeZone: string,
+    private readonly holidays: HolidayCalendarSource = NO_HOLIDAY_CALENDAR,
   ) {}
 
   async get(user: User, startDate: string, endDate: string, limit = 90, offset = 0, now = new Date()): Promise<HistoryResponse> {
@@ -27,7 +30,11 @@ export class HistoryService {
     const absenceStart = this.workTime.resolvedStartDate(user.workStartDate, first)
     const hourBankStart = this.workTime.hourBankStartDate(user.workStartDate, first)
     const today = localDateOf(now, this.timeZone)
-    const days = this.buildDays(user, startDate, endDate, today, absenceStart, periodLogs, now)
+    // One load covering both the requested period and the hour-bank span, so neither path queries per day.
+    const calendarStart = [startDate, hourBankStart || startDate].sort()[0]!
+    const calendarEnd = [endDate, today].sort().at(-1)!
+    const calendar = await this.holidays.calendarFor(user, calendarStart, calendarEnd)
+    const days = this.buildDays(user, startDate, endDate, today, absenceStart, periodLogs, now, calendar)
     const totalWorkedMinutes = days.reduce((total, day) => total + day.workedMinutes, 0)
     const totalBalanceMinutes = days.reduce((total, day) => total + day.balanceMinutes, 0)
     let hourBankMinutes = 0
@@ -36,7 +43,7 @@ export class HistoryService {
         user.id, localDateStart(addDays(hourBankStart, -1), this.timeZone), localDateStart(addDays(today, 1), this.timeZone),
       )
       hourBankMinutes = this.workTime.hourBank(
-        allLogs, user.dailyWorkloadMinutes, user.workDays, hourBankStart, today, absenceStart || hourBankStart,
+        allLogs, user.dailyWorkloadMinutes, user.workDays, hourBankStart, today, absenceStart || hourBankStart, calendar,
       )
     }
     return {
@@ -77,6 +84,7 @@ export class HistoryService {
 
   private buildDays(
     user: User, startDate: string, endDate: string, today: string, resolvedStart: string | null, logs: WorkLog[], now: Date,
+    calendar: HolidayCalendar,
   ): HistoryDayResponse[] {
     const byEntry = groupLogsByEntryDate(logs, this.timeZone)
     const workedByDate = minutesByDateIncludingOpen(logs, this.timeZone, now)
@@ -89,13 +97,18 @@ export class HistoryService {
         return localDateOf(log.entryAt, this.timeZone) <= date && localDateOf(end, this.timeZone) >= date
       })
       const hasActivity = activityLogs.length > 0 || workedMinutes > 0
-      const pastAbsence = date < today && Boolean(resolvedStart && date >= resolvedStart)
-        && effectiveWorkload(date, user.dailyWorkloadMinutes, user.workDays) > 0
-      if (!hasActivity && !pastAbsence) continue
+      const holiday = calendar.dayOn(date)
+      const workload = effectiveWorkload(date, user.dailyWorkloadMinutes, user.workDays, calendar)
+      const pastAbsence = date < today && Boolean(resolvedStart && date >= resolvedStart) && workload > 0
+      // A holiday still shows up, otherwise a day would silently vanish from the history.
+      const withinTrackedPeriod = Boolean(resolvedStart && date >= resolvedStart)
+      if (!hasActivity && !pastAbsence && !(holiday && withinTrackedPeriod)) continue
+      const holidayEntry = holiday ? holidayResponse(holiday) : null
       if (!hasActivity) {
         result.push({
           date, firstEntryAt: null, lastExitAt: null, workedMinutes: 0, pausedMinutes: 0,
-          balanceMinutes: -user.dailyWorkloadMinutes, isComplete: true, workLogs: [],
+          balanceMinutes: workload === 0 ? 0 : -workload, isComplete: true, workLogs: [],
+          holiday: holidayEntry, workedOnHoliday: false,
         })
         continue
       }
@@ -105,9 +118,10 @@ export class HistoryService {
         firstEntryAt: activityLogs[0]?.entryAt.toISOString() || null,
         lastExitAt: exits.length ? new Date(Math.max(...exits.map((value) => value.getTime()))).toISOString() : null,
         workedMinutes, pausedMinutes: pausedMinutes(activityLogs),
-        balanceMinutes: workedMinutes - effectiveWorkload(date, user.dailyWorkloadMinutes, user.workDays),
+        balanceMinutes: workedMinutes - workload,
         isComplete: activityLogs.length ? isDayComplete(activityLogs) : true,
         workLogs: activityLogs.map(workLogResponse),
+        holiday: holidayEntry, workedOnHoliday: Boolean(holiday) && workedMinutes > 0,
       })
     }
     return result

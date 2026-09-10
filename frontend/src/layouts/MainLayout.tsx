@@ -35,6 +35,12 @@ function MainLayout({ children }: { children: ReactNode }) {
           >
             Histórico
           </NavLink>
+          <NavLink
+            to="/holidays"
+            className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.active}` : styles.navLink)}
+          >
+            Feriados
+          </NavLink>
           {canManageUsers && (
             <>
               <NavLink

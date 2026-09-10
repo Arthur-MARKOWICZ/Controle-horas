@@ -8,9 +8,16 @@ import {
   formatInstantTime,
   formatWorkload,
 } from '../../utils/formatTime'
+import type { HolidayDay } from '../../types/api'
 import styles from './HistoryPage.module.css'
 
 interface HistoryFormValues { startDate: string; endDate: string }
+
+function holidayLabel(holiday: HolidayDay): string {
+  if (holiday.kind === 'BRIDGE') return 'Emenda'
+  if (holiday.kind === 'OBSERVED') return 'Folga transferida'
+  return holiday.dayOff ? 'Feriado' : 'Feriado trabalhado normalmente'
+}
 
 function HistoryPage() {
   const {
@@ -171,7 +178,14 @@ function HistoryPage() {
                     <tbody>
                       {history.days.map((day) => (
                         <tr key={day.date}>
-                          <td>{formatShortDate(day.date)}</td>
+                          <td>
+                            {formatShortDate(day.date)}
+                            {day.holiday && (
+                              <span className={styles.holidayBadge} title={day.holiday.name}>
+                                {holidayLabel(day.holiday)}
+                              </span>
+                            )}
+                          </td>
                           <td>{formatInstantTime(day.firstEntryAt)}</td>
                           <td>{formatInstantTime(day.lastExitAt)}</td>
                           <td>{formatWorkload(day.workedMinutes)}</td>
@@ -181,6 +195,9 @@ function HistoryPage() {
                             <span className={day.isComplete ? styles.completed : styles.open}>
                               {day.isComplete ? 'Completo' : 'Em andamento'}
                             </span>
+                            {day.workedOnHoliday && (
+                              <span className={styles.workedOnHolidayBadge}>Trabalhou no feriado</span>
+                            )}
                           </td>
                         </tr>
                       ))}

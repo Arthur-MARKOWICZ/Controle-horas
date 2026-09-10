@@ -1,7 +1,9 @@
 import bcrypt from 'bcryptjs'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Repositories } from '../src/database/repositories.js'
-import type { User } from '../src/domain/types.js'
+import type { Holiday, User } from '../src/domain/types.js'
+import type { HolidayCalendarEntry, HolidayCalendarSource } from '../src/shared/holiday-calendar.js'
+import { buildHolidayCalendar } from '../src/shared/holiday-calendar.js'
 import { AccessTokenDenylist, AuthService, type JwtCodec } from '../src/modules/auth/auth-service.js'
 import type { PasswordResetEmailSender } from '../src/modules/auth/email-sender.js'
 import { HistoryService } from '../src/modules/history/history-service.js'
@@ -421,5 +423,194 @@ describe('HistoryService characterization', () => {
       expect.objectContaining({ date: '2026-08-16', workedMinutes: 90 }),
       expect.objectContaining({ date: '2026-08-15', workedMinutes: 30 }),
     ])
+  })
+})
+
+describe('Holiday characterization', () => {
+  const workTime = new WorkTimeService('America/Sao_Paulo')
+  const timeZone = 'America/Sao_Paulo'
+  // 2026-07-13 is a Monday and is in the past relative to `now`, so an absence would be charged.
+  const holidayDate = '2026-07-13'
+  const todayDate = '2026-07-14'
+
+  function holiday(overrides: Partial<Holiday> = {}): Holiday {
+    return {
+      id: 'holiday-1', organizationId: null, countryCode: 'BR', subdivisionCode: null,
+      date: holidayDate, name: 'Feriado de teste', scope: 'NATIONAL', source: 'NAGER', ...overrides,
+    }
+  }
+  function entry(overrides: Partial<HolidayCalendarEntry> = {}): HolidayCalendarEntry {
+    return { holiday: holiday(), dayOff: true, ruleId: null, observedDate: null, bridgeDate: null, ...overrides }
+  }
+  function calendarSource(entries: HolidayCalendarEntry[]): HolidayCalendarSource {
+    const calendar = buildHolidayCalendar(entries)
+    return { calendarFor: async () => calendar }
+  }
+  const dayOffSource = calendarSource([entry()])
+  const workingHolidaySource = calendarSource([entry({ dayOff: false })])
+  const todayDayOffSource = calendarSource([entry({ holiday: holiday({ date: todayDate }) })])
+
+  function history(methods: Record<string, unknown> = {}, holidays?: HolidayCalendarSource) {
+    const repos = repositories({
+      findWorkLogsOverlappingRange: vi.fn().mockResolvedValue([]), findFirstWorkLog: vi.fn().mockResolvedValue(null),
+      findWorkLogsUntil: vi.fn().mockResolvedValue([]), ...methods,
+    })
+    return holidays
+      ? new HistoryService(repos, workTime, timeZone, holidays)
+      : new HistoryService(repos, workTime, timeZone)
+  }
+
+  it('keeps the previous behaviour when no calendar source is wired in', async () => {
+    const result = await history().get(user({ workStartDate: '2026-07-13' }), holidayDate, holidayDate, 90, 0, now)
+    expect(result.days[0]).toMatchObject({ balanceMinutes: -480, holiday: null, workedOnHoliday: false })
+  })
+
+  it('does not charge an absence for a holiday without records', async () => {
+    const result = await history({}, dayOffSource)
+      .get(user({ workStartDate: '2026-07-13' }), holidayDate, holidayDate, 90, 0, now)
+    expect(result.days[0]).toMatchObject({ workedMinutes: 0, balanceMinutes: 0, isComplete: true })
+  })
+
+  it('still shows the holiday in the history so the day does not vanish', async () => {
+    const result = await history({}, dayOffSource)
+      .get(user({ workStartDate: '2026-07-13' }), holidayDate, holidayDate, 90, 0, now)
+    expect(result.days).toHaveLength(1)
+    expect(result.days[0]?.holiday).toMatchObject({ name: 'Feriado de teste', scope: 'NATIONAL', dayOff: true })
+  })
+
+  it('charges the full workload when the holiday is not a day off', async () => {
+    const result = await history({}, workingHolidaySource)
+      .get(user({ workStartDate: '2026-07-13' }), holidayDate, holidayDate, 90, 0, now)
+    expect(result.days[0]).toMatchObject({ balanceMinutes: -480, holiday: expect.objectContaining({ dayOff: false }) })
+  })
+
+  it('credits every worked minute on a holiday and flags the day', async () => {
+    const worked = [workLog('2026-07-13T11:00:00Z', '2026-07-13T15:00:00Z')]
+    const result = await history({
+      findWorkLogsOverlappingRange: vi.fn().mockResolvedValue(worked),
+    }, dayOffSource).get(user({ workStartDate: '2026-07-13' }), holidayDate, holidayDate, 90, 0, now)
+    expect(result.days[0]).toMatchObject({ workedMinutes: 240, balanceMinutes: 240, workedOnHoliday: true })
+  })
+
+  it('does not flag a worked holiday when the day carries no holiday', async () => {
+    const worked = [workLog('2026-07-13T11:00:00Z', '2026-07-13T15:00:00Z')]
+    const result = await history({ findWorkLogsOverlappingRange: vi.fn().mockResolvedValue(worked) })
+      .get(user({ workStartDate: '2026-07-13' }), holidayDate, holidayDate, 90, 0, now)
+    expect(result.days[0]).toMatchObject({ workedOnHoliday: false, holiday: null })
+  })
+
+  it('leaves the hour bank untouched by a holiday with no records', () => {
+    const calendar = buildHolidayCalendar([entry()])
+    expect(workTime.hourBank([], 480, ['MONDAY', 'TUESDAY'], '2026-07-13', '2026-07-15', '2026-07-13', calendar))
+      .toBe(-480)
+  })
+
+  it('does not calculate an expected exit over a zero workload holiday', () => {
+    const calendar = buildHolidayCalendar([entry()])
+    const logs = [workLog('2026-07-13T11:30:00Z', '2026-07-13T15:00:00Z')]
+    expect(workTime.expectedExit(logs, holidayDate, 480, ['MONDAY'], false, 0, calendar)?.toISOString())
+      .toBe('2026-07-13T11:30:00.000Z')
+  })
+
+  it('exposes the holiday on the dashboard', async () => {
+    const repos = repositories({
+      findWorkLogsOverlappingRange: vi.fn().mockResolvedValue([]), findFirstWorkLog: vi.fn().mockResolvedValue(null),
+      findWorkLogsUntil: vi.fn().mockResolvedValue([]),
+    })
+    const dashboard = await new WorkLogService(repos, workTime, timeZone, todayDayOffSource).dashboard(user(), now)
+    expect(dashboard).toMatchObject({
+      date: todayDate, balanceMinutesToday: 0, workedOnHoliday: false,
+      holiday: expect.objectContaining({ name: 'Feriado de teste', dayOff: true }),
+    })
+  })
+
+  it('reports no holiday on the dashboard when there is none', async () => {
+    const repos = repositories({
+      findWorkLogsOverlappingRange: vi.fn().mockResolvedValue([]), findFirstWorkLog: vi.fn().mockResolvedValue(null),
+      findWorkLogsUntil: vi.fn().mockResolvedValue([]),
+    })
+    const dashboard = await new WorkLogService(repos, workTime, timeZone).dashboard(user(), now)
+    expect(dashboard).toMatchObject({ holiday: null, workedOnHoliday: false, balanceMinutesToday: -480 })
+  })
+})
+
+describe('Holiday move and bridge characterization', () => {
+  const workTime = new WorkTimeService('America/Sao_Paulo')
+  const timeZone = 'America/Sao_Paulo'
+  // 2026-07-13 is a Monday and 2026-07-14 a Tuesday, both scheduled and both in the past.
+  const holidayDate = '2026-07-13'
+  const nextDay = '2026-07-14'
+
+  function holiday(): Holiday {
+    return {
+      id: 'holiday-1', organizationId: null, countryCode: 'BR', subdivisionCode: null,
+      date: holidayDate, name: 'Feriado de teste', scope: 'NATIONAL', source: 'NAGER',
+    }
+  }
+  function entry(overrides: Partial<HolidayCalendarEntry> = {}): HolidayCalendarEntry {
+    return { holiday: holiday(), dayOff: true, ruleId: 'rule-1', observedDate: null, bridgeDate: null, ...overrides }
+  }
+  function source(overrides: Partial<HolidayCalendarEntry> = {}): HolidayCalendarSource {
+    const calendar = buildHolidayCalendar([entry(overrides)])
+    return { calendarFor: async () => calendar }
+  }
+  function history(holidays: HolidayCalendarSource) {
+    return new HistoryService(repositories({
+      findWorkLogsOverlappingRange: vi.fn().mockResolvedValue([]), findFirstWorkLog: vi.fn().mockResolvedValue(null),
+      findWorkLogsUntil: vi.fn().mockResolvedValue([]),
+    }), workTime, timeZone, holidays)
+  }
+  const employee = () => user({ workStartDate: '2026-07-13' })
+  const dayAt = async (holidays: HolidayCalendarSource, date: string) => {
+    const result = await history(holidays).get(employee(), holidayDate, nextDay, 90, 0, now)
+    return result.days.find((day) => day.date === date)
+  }
+
+  it('charges the holiday and clears the observed day when the date is moved', async () => {
+    const moved = source({ observedDate: nextDay })
+    expect(await dayAt(moved, holidayDate)).toMatchObject({
+      balanceMinutes: -480, holiday: expect.objectContaining({ kind: 'HOLIDAY', dayOff: false }),
+    })
+    expect(await dayAt(moved, nextDay)).toMatchObject({
+      balanceMinutes: 0, holiday: expect.objectContaining({ kind: 'OBSERVED', dayOff: true }),
+    })
+  })
+
+  it('reports the original holiday date on a moved day off', async () => {
+    const day = await dayAt(source({ observedDate: nextDay }), nextDay)
+    expect(day?.holiday).toMatchObject({ date: nextDay, holidayDate, name: 'Feriado de teste' })
+  })
+
+  it('clears both days when the holiday is bridged', async () => {
+    const bridged = source({ bridgeDate: nextDay })
+    expect(await dayAt(bridged, holidayDate)).toMatchObject({ balanceMinutes: 0 })
+    expect(await dayAt(bridged, nextDay)).toMatchObject({
+      balanceMinutes: 0, holiday: expect.objectContaining({ kind: 'BRIDGE' }),
+    })
+  })
+
+  it('keeps the hour bank consistent with a moved day off', () => {
+    const moved = buildHolidayCalendar([entry({ observedDate: nextDay })])
+    const plain = buildHolidayCalendar([entry()])
+    const workDays = ['MONDAY', 'TUESDAY'] as const
+    // Either way exactly one of the two days is charged, so the total is the same.
+    expect(workTime.hourBank([], 480, workDays, holidayDate, '2026-07-15', holidayDate, moved)).toBe(-480)
+    expect(workTime.hourBank([], 480, workDays, holidayDate, '2026-07-15', holidayDate, plain)).toBe(-480)
+  })
+
+  it('costs one extra day of workload when the holiday is bridged', () => {
+    const bridged = buildHolidayCalendar([entry({ bridgeDate: nextDay })])
+    expect(workTime.hourBank([], 480, ['MONDAY', 'TUESDAY'], holidayDate, '2026-07-15', holidayDate, bridged)).toBe(0)
+  })
+
+  it('credits work done on a holiday whose day off was moved away', async () => {
+    const worked = [workLog('2026-07-13T11:00:00Z', '2026-07-13T15:00:00Z')]
+    const service = new HistoryService(repositories({
+      findWorkLogsOverlappingRange: vi.fn().mockResolvedValue(worked),
+      findFirstWorkLog: vi.fn().mockResolvedValue(null), findWorkLogsUntil: vi.fn().mockResolvedValue([]),
+    }), workTime, timeZone, source({ observedDate: nextDay }))
+    const result = await service.get(employee(), holidayDate, holidayDate, 90, 0, now)
+    // The workload still applies on that date, so four hours worked is a four hour shortfall.
+    expect(result.days[0]).toMatchObject({ workedMinutes: 240, balanceMinutes: -240, workedOnHoliday: true })
   })
 })

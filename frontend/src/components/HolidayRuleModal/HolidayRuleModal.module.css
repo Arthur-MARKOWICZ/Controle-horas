@@ -1,0 +1,38 @@
+.backdrop {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, .45);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-md); z-index: 50;
+}
+.dialog {
+  background: var(--color-surface); color: var(--color-text);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft); padding: var(--space-lg);
+  width: min(34rem, 100%); max-height: 90vh; overflow-y: auto;
+}
+.dialog h2 { margin: 0; font-family: var(--font-display); }
+.subtitle { color: var(--color-text-muted); margin: var(--space-xs) 0 var(--space-lg); }
+.field { display: flex; flex-direction: column; gap: var(--space-xs); margin-bottom: var(--space-md); font-weight: 600; }
+.field select, .field input[type="text"], .field input[type="date"] {
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  padding: .65rem; background: var(--color-surface); color: var(--color-text);
+}
+.userList {
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  max-height: 12rem; overflow-y: auto; padding: var(--space-sm);
+}
+.userOption { display: flex; align-items: center; gap: var(--space-sm); font-weight: 400; padding: .2rem 0; }
+.hint { color: var(--color-text-muted); font-weight: 400; font-size: .85rem; margin: 0; }
+.warning {
+  border: 1px solid var(--color-warning-text); background: var(--color-warning-bg);
+  color: var(--color-warning-text); border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md); margin-bottom: var(--space-md); font-size: .9rem;
+}
+.actions { display: flex; gap: var(--space-sm); justify-content: flex-end; margin-top: var(--space-lg); }
+.actions button {
+  border: 1px solid var(--color-primary); border-radius: var(--radius-sm);
+  background: var(--color-primary); color: var(--color-on-primary);
+  padding: .65rem 1rem; cursor: pointer; font-weight: 600; min-height: 2.75rem;
+}
+.secondary { background: var(--color-surface) !important; color: var(--color-text) !important; }
+.actions button:disabled { cursor: not-allowed; opacity: .65; }
+.error { color: var(--color-danger); margin: var(--space-sm) 0 0; }

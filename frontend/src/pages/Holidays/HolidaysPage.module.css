@@ -1,0 +1,33 @@
+.page { width: 100%; }
+.header h1, .card h2 { margin: 0; font-family: var(--font-display); }
+.header p, .hint, .cardHeader span { color: var(--color-text-muted); margin: var(--space-sm) 0 0; }
+.card { background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow-soft); border-radius: var(--radius-md); padding: var(--space-lg); margin-top: var(--space-lg); }
+.cardHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
+button { border: 1px solid var(--color-primary); border-radius: var(--radius-sm); background: var(--color-primary); color: var(--color-on-primary); padding: .65rem 1rem; cursor: pointer; font-weight: 600; min-height: 2.75rem; }
+.secondaryButton { background: var(--color-surface); color: var(--color-text); }
+button:disabled { cursor: not-allowed; opacity: .65; }
+.monthNav { display: flex; align-items: center; gap: var(--space-md); }
+.headerActions { display: flex; align-items: center; gap: var(--space-sm); }
+a.secondaryButton { text-decoration: none; display: inline-flex; align-items: center; border: 1px solid var(--color-primary); border-radius: var(--radius-sm); padding: .65rem 1rem; font-weight: 600; min-height: 2.75rem; }
+.monthLabel { font-weight: 600; min-width: 11rem; text-align: center; }
+.monthLabel::first-letter { text-transform: uppercase; }
+.gridWrapper { overflow-x: auto; margin-top: var(--space-md); }
+.grid { display: grid; grid-template-columns: repeat(7, minmax(2.5rem, 1fr)); gap: var(--space-xs); min-width: 20rem; }
+.weekDay { text-align: center; font-weight: 600; color: var(--color-text-muted); padding: var(--space-xs) 0; }
+.day { border: 1px solid var(--color-border); border-radius: var(--radius-sm); min-height: 3.5rem; padding: var(--space-xs); display: flex; flex-direction: column; gap: 2px; }
+.dayEmpty { border: none; }
+.dayNumber { font-weight: 600; }
+.dayOff { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
+.dayNote { border-color: var(--color-text-muted); }
+.dayName { font-size: .7rem; line-height: 1.1; color: var(--color-text-muted); }
+.list { list-style: none; margin: var(--space-md) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+.list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-sm); }
+.badge { border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: .15rem .5rem; font-size: .75rem; color: var(--color-text-muted); }
+.error { color: var(--color-danger); margin: var(--space-sm) 0 0; }
+.success { color: var(--color-primary); margin: var(--space-sm) 0 0; }
+@media (max-width: 42rem) { .cardHeader { align-items: flex-start; flex-direction: column; } }
+.createForm { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: var(--space-md); align-items: end; margin-top: var(--space-md); }
+.createForm label { display: flex; flex-direction: column; gap: var(--space-xs); font-weight: 600; }
+.createForm input { border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: .65rem; background: var(--color-surface); color: var(--color-text); }
+.deleteButton { background: var(--color-danger); border-color: var(--color-danger); color: var(--color-on-primary); }
+@media (max-width: 52rem) { .createForm { grid-template-columns: 1fr; } }

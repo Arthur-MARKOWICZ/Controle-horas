@@ -18,6 +18,9 @@ export interface AppConfig {
   smtpUrl: string | null
   smtpFrom: string | null
   publicAppUrl: string | null
+  nagerBaseUrl: string
+  nagerTimeoutMs: number
+  holidaySyncRateLimitPerMinute: number
 }
 
 function required(environment: NodeJS.ProcessEnv, name: string): string {
@@ -79,5 +82,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     smtpUrl: environment.SMTP_URL?.trim() || null,
     smtpFrom: environment.SMTP_FROM?.trim() || null,
     publicAppUrl: environment.PUBLIC_APP_URL?.trim().replace(/\/$/, '') || null,
+    nagerBaseUrl: (environment.NAGER_BASE_URL?.trim() || 'https://date.nager.at').replace(/\/$/, ''),
+    nagerTimeoutMs: integer(environment, 'NAGER_TIMEOUT_MS', 5_000, 500, 30_000),
+    holidaySyncRateLimitPerMinute: integer(environment, 'HOLIDAY_SYNC_RATE_LIMIT_PER_MINUTE', 5, 1, 1_000),
   }
 }

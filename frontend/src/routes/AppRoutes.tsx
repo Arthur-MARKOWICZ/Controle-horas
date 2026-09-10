@@ -14,6 +14,8 @@ const ImportPage = lazy(() => import('../pages/Import/ImportPage'))
 const ScheduleSettingsPage = lazy(() => import('../pages/ScheduleSettings/ScheduleSettingsPage'))
 const WorkLogAdjustmentsPage = lazy(() => import('../pages/WorkLogAdjustments/WorkLogAdjustmentsPage'))
 const OutsideScheduleWorkDaysPage = lazy(() => import('../pages/OutsideScheduleWorkDays/OutsideScheduleWorkDaysPage'))
+const HolidaysPage = lazy(() => import('../pages/Holidays/HolidaysPage'))
+const HolidayRulesPage = lazy(() => import('../pages/HolidayRules/HolidayRulesPage'))
 const AccountPage = lazy(() => import('../pages/Account/AccountPage'))
 const ResetPasswordPage = lazy(() => import('../pages/ResetPassword/ResetPasswordPage'))
 
@@ -33,12 +35,14 @@ function AppRoutes() {
     <Route element={<ProtectedRoute />}>
       <Route path="/" element={<DashboardPage />} />
       <Route path="/history" element={<HistoryPage />} />
+      <Route path="/holidays" element={<HolidaysPage />} />
       <Route path="/settings/schedule" element={<ScheduleSettingsPage />} />
       <Route path="/settings/account" element={<AccountPage />} />
     </Route>
     <Route element={<RoleRoute allowedRoles={['ADMIN', 'MANAGER']} />}>
       <Route path="/settings/work-logs" element={<WorkLogAdjustmentsPage />} />
       <Route path="/settings/work-logs/outside-schedule" element={<OutsideScheduleWorkDaysPage />} />
+      <Route path="/settings/holidays/rules" element={<HolidayRulesPage />} />
     </Route>
     <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
       <Route path="/import" element={<ImportPage />} />

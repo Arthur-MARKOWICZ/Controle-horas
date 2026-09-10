@@ -222,4 +222,64 @@ describe('HistoryPage', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('Falha ao carregar histórico')
   })
+  function historyWithDay(day: Record<string, unknown>) {
+    useHistoryMock.mockReturnValue({
+      history: {
+        startDate: monthRange.startDate, endDate: monthRange.endDate,
+        totalWorkedMinutes: 0, totalBalanceMinutes: 0, hourBankMinutes: 0,
+        workedDayTotals: { total: 0, inSchedule: 0, outsideSchedule: 0 },
+        days: [{
+          date: '2026-07-14', firstEntryAt: null, lastExitAt: null, workedMinutes: 0,
+          pausedMinutes: 0, balanceMinutes: 0, isComplete: true, workLogs: [],
+          holiday: null, workedOnHoliday: false, ...day,
+        }],
+      },
+      startDate: monthRange.startDate, endDate: monthRange.endDate,
+      isLoading: false, isExporting: false, error: '', exportError: '',
+      loadHistory: vi.fn(), exportHistory: vi.fn(),
+    })
+  }
+
+  const holiday = {
+    holidayId: 'holiday-1', date: '2026-07-14', name: 'Feriado de teste',
+    scope: 'NATIONAL' as const, source: 'NAGER' as const, subdivisionCode: null, dayOff: true,
+  }
+
+  it('marks a day off caused by a holiday', () => {
+    historyWithDay({ holiday })
+    renderHistory()
+    expect(screen.getByText('Feriado')).toBeInTheDocument()
+    expect(screen.getByTitle('Feriado de teste')).toBeInTheDocument()
+    expect(screen.queryByText('Trabalhou no feriado')).not.toBeInTheDocument()
+  })
+
+  it('distinguishes a holiday that is still a working day', () => {
+    historyWithDay({ holiday: { ...holiday, dayOff: false } })
+    renderHistory()
+    expect(screen.getByText('Feriado trabalhado normalmente')).toBeInTheDocument()
+  })
+
+  it('flags a day worked on a holiday', () => {
+    historyWithDay({ holiday, workedMinutes: 240, balanceMinutes: 240, workedOnHoliday: true })
+    renderHistory()
+    expect(screen.getByText('Trabalhou no feriado')).toBeInTheDocument()
+  })
+
+  it('shows no holiday marks on an ordinary day', () => {
+    historyWithDay({})
+    renderHistory()
+    expect(screen.queryByText('Feriado')).not.toBeInTheDocument()
+    expect(screen.queryByText('Trabalhou no feriado')).not.toBeInTheDocument()
+  })
+  it('labels a day off that was moved from another date', () => {
+    historyWithDay({ holiday: { ...holiday, kind: 'OBSERVED', holidayDate: '2026-07-13' } })
+    renderHistory()
+    expect(screen.getByText('Folga transferida')).toBeInTheDocument()
+  })
+
+  it('labels a bridged day', () => {
+    historyWithDay({ holiday: { ...holiday, kind: 'BRIDGE', holidayDate: '2026-07-13' } })
+    renderHistory()
+    expect(screen.getByText('Emenda')).toBeInTheDocument()
+  })
 })

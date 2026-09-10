@@ -3,7 +3,10 @@ import type { DashboardResponse, HourBankRecalculationResponse } from '../../dom
 import { workLogResponse } from '../../domain/contracts.js'
 import type { CloseReason, User, WorkedDayTotals } from '../../domain/types.js'
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors.js'
+import type { HolidayCalendarSource } from '../../shared/holiday-calendar.js'
+import { NO_HOLIDAY_CALENDAR } from '../../shared/holiday-calendar.js'
 import { addDays, effectiveWorkload, localDateOf, localDateStart, pausedMinutes } from '../../shared/time.js'
+import { holidayResponse } from '../../domain/contracts.js'
 import type { WorkTimeService } from './work-time-service.js'
 
 export class WorkLogService {
@@ -11,6 +14,7 @@ export class WorkLogService {
     private readonly repositories: Repositories,
     private readonly workTime: WorkTimeService,
     private readonly timeZone: string,
+    private readonly holidays: HolidayCalendarSource = NO_HOLIDAY_CALENDAR,
   ) {}
 
   async register(user: User, action: 'entry' | 'pause' | 'lunch' | 'resume' | 'exit', now = new Date()): Promise<DashboardResponse> {
@@ -56,11 +60,13 @@ export class WorkLogService {
     const logs = await this.repositories.findWorkLogsOverlappingRange(user.id, start, end)
     const scheduleConfigured = Boolean(user.standardEntryTime && user.standardExitTime && user.workDays.length)
     const workedMinutesToday = this.workTime.workedMinutesOnDateIncludingOpen(logs, date, now)
+    const calendar = await this.holidays.calendarFor(user, date, date)
+    const holiday = calendar.dayOn(date)
     let balanceMinutesToday = 0; let expectedExitAt: Date | null = null; let hourBankMinutes = 0
     if (scheduleConfigured) {
-      balanceMinutesToday = workedMinutesToday - effectiveWorkload(date, user.dailyWorkloadMinutes, user.workDays)
+      balanceMinutesToday = workedMinutesToday - effectiveWorkload(date, user.dailyWorkloadMinutes, user.workDays, calendar)
       expectedExitAt = this.workTime.expectedExit(
-        logs, date, user.dailyWorkloadMinutes, user.workDays, user.lunchEnabled, user.lunchDurationMinutes,
+        logs, date, user.dailyWorkloadMinutes, user.workDays, user.lunchEnabled, user.lunchDurationMinutes, calendar,
       )
       hourBankMinutes = await this.calculateHourBank(user, date, end)
     }
@@ -71,6 +77,8 @@ export class WorkLogService {
       nextAction: this.workTime.nextAction(logs), expectedExitAt: expectedExitAt?.toISOString() || null,
       workedMinutesToday, pausedMinutesToday: pausedMinutes(logs), balanceMinutesToday, hourBankMinutes,
       workLogs: logs.map(workLogResponse), scheduleConfigured,
+      holiday: holiday ? holidayResponse(holiday) : null,
+      workedOnHoliday: Boolean(holiday) && workedMinutesToday > 0,
     }
   }
 
@@ -93,8 +101,10 @@ export class WorkLogService {
     const allLogs = await this.repositories.findWorkLogsUntil(
       user.id, localDateStart(addDays(hourBankStart, -1), this.timeZone), end,
     )
+    // One load for the whole period the hour bank spans, never one per day.
+    const calendar = await this.holidays.calendarFor(user, hourBankStart, untilDate)
     return this.workTime.hourBank(
-      allLogs, user.dailyWorkloadMinutes, user.workDays, hourBankStart, untilDate, absenceStart || hourBankStart,
+      allLogs, user.dailyWorkloadMinutes, user.workDays, hourBankStart, untilDate, absenceStart || hourBankStart, calendar,
     )
   }
 

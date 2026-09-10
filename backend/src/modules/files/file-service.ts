@@ -1,5 +1,6 @@
 import type { Repositories, ImportedWorkLog } from '../../database/repositories.js'
 import type { Readable } from 'node:stream'
+import type { HistoryDayResponse } from '../../domain/contracts.js'
 import type { CloseReason, User } from '../../domain/types.js'
 import { CLOSE_REASONS } from '../../domain/types.js'
 import { ForbiddenError, NotFoundError, ValidationError } from '../../shared/errors.js'
@@ -57,6 +58,18 @@ function xlsxTimeValue(value: unknown): unknown {
   const hour = value.getUTCHours().toString().padStart(2, '0')
   const minute = value.getUTCMinutes().toString().padStart(2, '0')
   return `${hour}:${minute}`
+}
+
+/**
+ * Why a day carries no workload, so an exported report does not look like missing data.
+ * ASCII only, matching the rest of the exported text.
+ */
+function holidayNote(holiday: HistoryDayResponse['holiday']): string {
+  if (!holiday) return ''
+  const label = holiday.kind === 'BRIDGE' ? 'Emenda'
+    : holiday.kind === 'OBSERVED' ? 'Folga transferida'
+      : holiday.dayOff ? 'Feriado' : 'Feriado trabalhado normalmente'
+  return `${label}: ${holiday.name}`
 }
 
 export class FileService {
@@ -136,11 +149,12 @@ export class FileService {
       [excelText('Horas trabalhadas'), excelText(duration(data.totalWorkedMinutes))],
       [excelText('Saldo do periodo'), excelText(duration(data.totalBalanceMinutes, true))],
       [excelText('Banco de horas'), excelText(duration(data.hourBankMinutes, true))],
-      [], ['Data', 'Primeira entrada', 'Ultima saida', 'Horas trabalhadas', 'Saldo', 'Status'].map(excelText),
+      [], ['Data', 'Primeira entrada', 'Ultima saida', 'Horas trabalhadas', 'Saldo', 'Status', 'Feriado'].map(excelText),
     ])
     data.days.forEach((day) => sheet.addRow([
       localDate(day.date), localInstant(day.firstEntryAt, this.timeZone), localInstant(day.lastExitAt, this.timeZone),
       duration(day.workedMinutes), duration(day.balanceMinutes, true), day.isComplete ? 'Completo' : 'Em andamento',
+      holidayNote(day.holiday),
     ].map(excelText)))
     sheet.columns.forEach((column) => { column.width = 24 })
     return Buffer.from(await workbook.xlsx.writeBuffer())
@@ -163,7 +177,8 @@ export class FileService {
       document.text(
         `${localDate(day.date)} | ${localInstant(day.firstEntryAt, this.timeZone)} | `
         + `${localInstant(day.lastExitAt, this.timeZone)} | ${duration(day.workedMinutes)} | `
-        + `${duration(day.balanceMinutes, true)} | ${day.isComplete ? 'Completo' : 'Em andamento'}`,
+        + `${duration(day.balanceMinutes, true)} | ${day.isComplete ? 'Completo' : 'Em andamento'}`
+        + `${holidayNote(day.holiday) ? ` | ${holidayNote(day.holiday)}` : ''}`,
       )
     }
     document.end()

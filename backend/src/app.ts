@@ -22,6 +22,12 @@ import { WorkTimeService } from './modules/work-logs/work-time-service.js'
 import { WorkLogService } from './modules/work-logs/work-log-service.js'
 import { HistoryService } from './modules/history/history-service.js'
 import { FileService } from './modules/files/file-service.js'
+import {
+  HolidayService, type HolidayRuleInput, type ManualHolidayInput,
+} from './modules/holidays/holiday-service.js'
+import { OrganizationResolver } from './modules/holidays/organization-resolver.js'
+import { HolidaySyncService } from './modules/holidays/holiday-sync-service.js'
+import { NagerHolidayProvider, type HolidayProvider } from './modules/holidays/nager-holiday-provider.js'
 
 declare module 'fastify' {
   interface FastifyRequest { authUser: User | null }
@@ -31,7 +37,7 @@ declare module '@fastify/jwt' {
   interface FastifyJWT { namespaces: 'access' | 'refresh' }
 }
 
-interface BuildOptions { config?: AppConfig; pool?: Pool; logger?: boolean }
+interface BuildOptions { config?: AppConfig; pool?: Pool; logger?: boolean; holidayProvider?: HolidayProvider }
 interface LoginBody { email: string; password: string }
 interface RegisterBody extends LoginBody { name: string }
 interface RefreshBody { refreshToken: string }
@@ -39,10 +45,17 @@ interface BiometricLoginBody { email: string; credentialId: string; credentialSe
 interface CredentialParams { credentialId: string }
 interface ManagerBody { managerId: string | null }
 interface HistoryQuery { startDate: string; endDate: string; limit?: string; offset?: string }
+interface HolidayQuery { startDate: string; endDate: string; userId?: string }
+interface HolidayRuleParams { holidayId: string }
+interface HolidayRuleIdParams { ruleId: string }
+interface HolidayIdParams { holidayId: string }
+interface HolidaySyncBody { year: number }
 interface AdministrativeWorkLogBody { entryAt: string; exitAt: string }
 interface ChangePasswordBody { currentPassword: string; newPassword: string }
 interface RequestPasswordResetBody { email: string }
 interface ResetPasswordBody { token: string; newPassword: string }
+
+const HOLIDAY_COUNTRY_CODE = 'BR'
 
 const responseSchema = {
   type: 'object', required: ['success', 'message', 'data'],
@@ -134,8 +147,13 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
     config.publicAppUrl,
   )
   const workTime = new WorkTimeService(config.timeZone)
-  const workLogs = new WorkLogService(repositories, workTime, config.timeZone)
-  const history = new HistoryService(repositories, workTime, config.timeZone)
+  const holidayProvider = options.holidayProvider
+    || new NagerHolidayProvider(config.nagerBaseUrl, config.nagerTimeoutMs)
+  const holidaySync = new HolidaySyncService(repositories, holidayProvider, app.log)
+  const organizations = new OrganizationResolver(repositories)
+  const holidays = new HolidayService(repositories, users, organizations, holidaySync, HOLIDAY_COUNTRY_CODE)
+  const workLogs = new WorkLogService(repositories, workTime, config.timeZone, holidays)
+  const history = new HistoryService(repositories, workTime, config.timeZone, holidays)
   const files = new FileService(repositories, users, history, config.timeZone)
 
   app.addHook('onRoute', (routeOptions) => {
@@ -361,10 +379,65 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
     return ok('Work log deleted successfully', null)
   })
 
-  const requireAdmin = async (request: FastifyRequest): Promise<void> => {
+  const requireAdminFor = (message: string) => async (request: FastifyRequest): Promise<void> => {
     await authenticate(request)
-    if (actor(request).role !== 'ADMIN') throw new ForbiddenError('Only administrators can import work logs')
+    if (actor(request).role !== 'ADMIN') throw new ForbiddenError(message)
   }
+
+  const requireHolidayRuleAccess = async (request: FastifyRequest): Promise<void> => {
+    await authenticate(request)
+    if (!['ADMIN', 'MANAGER'].includes(actor(request).role)) {
+      throw new ForbiddenError('Only administrators and managers can manage holiday rules')
+    }
+  }
+
+  app.get<{ Querystring: HolidayQuery }>('/api/holidays', {
+    preHandler: authenticate, schema: { querystring: holidayQuerySchema() },
+  }, async (request) => {
+    const target = request.query.userId
+      ? await users.requireAccess(actor(request), request.query.userId)
+      : actor(request)
+    return ok('Holidays retrieved successfully', await holidays.calendar(
+      target, request.query.startDate, request.query.endDate,
+    ))
+  })
+
+  app.get('/api/holidays/rules', {
+    preHandler: requireHolidayRuleAccess,
+  }, async (request) => ok('Holiday rules retrieved successfully', await holidays.listRules(actor(request))))
+
+  app.put<{ Params: HolidayRuleParams; Body: HolidayRuleInput }>('/api/holidays/:holidayId/rule', {
+    preHandler: requireHolidayRuleAccess,
+    schema: { params: uuidParams('holidayId'), body: holidayRuleSchema() },
+  }, async (request) => ok(
+    'Holiday rule saved successfully',
+    await holidays.saveRule(actor(request), request.params.holidayId, request.body),
+  ))
+
+  app.delete<{ Params: HolidayRuleIdParams }>('/api/holidays/rules/:ruleId', {
+    preHandler: requireHolidayRuleAccess, schema: { params: uuidParams('ruleId') },
+  }, async (request) => {
+    await holidays.deleteRule(actor(request), request.params.ruleId)
+    return ok('Holiday rule deleted successfully', null)
+  })
+
+  const requireHolidayCatalogueAdmin = requireAdminFor('Only administrators can manage company holidays')
+
+  app.post<{ Body: ManualHolidayInput }>('/api/holidays', {
+    preHandler: requireHolidayCatalogueAdmin, schema: { body: manualHolidaySchema() },
+  }, async (request, reply) => reply.code(201).send(
+    ok('Holiday created successfully', await holidays.createHoliday(actor(request), request.body)),
+  ))
+
+  app.delete<{ Params: HolidayIdParams }>('/api/holidays/:holidayId', {
+    preHandler: requireHolidayCatalogueAdmin, schema: { params: uuidParams('holidayId') },
+  }, async (request) => {
+    await holidays.deleteHoliday(actor(request), request.params.holidayId)
+    return ok('Holiday deleted successfully', null)
+  })
+
+  const requireAdmin = requireAdminFor('Only administrators can import work logs')
+  const requireHolidayAdmin = requireAdminFor('Only administrators can synchronize holidays')
   app.get('/api/migrations/template.csv', { preHandler: requireAdmin }, async (_request, reply) => {
     return reply.header('Content-Disposition', 'attachment; filename="work-logs-template.csv"').type('text/csv').send(files.csvTemplate())
   })
@@ -377,6 +450,13 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
     if (!part) throw new ValidationError('File is required')
     return ok('Import finished', await files.importFile(actor(request), part.filename, await part.toBuffer()))
   })
+
+  app.post<{ Body: HolidaySyncBody }>('/api/holidays/sync', {
+    preHandler: requireHolidayAdmin,
+    // The only route that reaches the holiday provider on demand.
+    config: { rateLimit: { max: config.holidaySyncRateLimitPerMinute, timeWindow: '1 minute' } },
+    schema: { body: holidaySyncSchema() },
+  }, async (request) => ok('Holidays synchronized successfully', await holidays.resync(request.body.year)))
 
   app.setErrorHandler((unknownError, request, reply) => {
     const error = unknownError as FastifyError & { validation?: Array<{ message?: string }> }
@@ -392,6 +472,55 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
 
   app.addHook('onClose', async () => { if (!options.pool) await pool.end() })
   return app
+}
+
+function holidayQuerySchema(): object {
+  return {
+    type: 'object', required: ['startDate', 'endDate'],
+    properties: {
+      startDate: { type: 'string', format: 'date' },
+      endDate: { type: 'string', format: 'date' },
+      userId: { type: 'string', format: 'uuid' },
+    },
+  }
+}
+
+function manualHolidaySchema(): object {
+  return {
+    type: 'object', additionalProperties: false, required: ['date', 'name', 'scope'],
+    properties: {
+      date: { type: 'string', format: 'date' },
+      name: { type: 'string', minLength: 1, maxLength: 160 },
+      scope: { type: 'string', enum: ['MUNICIPAL', 'COMPANY'] },
+      subdivisionCode: { anyOf: [{ type: 'string', maxLength: 10 }, { type: 'null' }] },
+    },
+  }
+}
+
+function holidayRuleSchema(): object {
+  return {
+    type: 'object', additionalProperties: false, required: ['userIds', 'dayOff'],
+    properties: {
+      userIds: {
+        anyOf: [{ type: 'array', items: { type: 'string', format: 'uuid' }, minItems: 1, maxItems: 200 }, { type: 'null' }],
+      },
+      dayOff: { type: 'boolean' },
+      observedDate: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }] },
+      bridgeDate: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }] },
+      notes: { anyOf: [{ type: 'string', maxLength: 255 }, { type: 'null' }] },
+    },
+  }
+}
+
+function uuidParams(name: string): object {
+  return { type: 'object', required: [name], properties: { [name]: { type: 'string', format: 'uuid' } } }
+}
+
+function holidaySyncSchema(): object {
+  return {
+    type: 'object', additionalProperties: false, required: ['year'],
+    properties: { year: { type: 'integer', minimum: 1900, maximum: 2200 } },
+  }
 }
 
 function idParams(): object {

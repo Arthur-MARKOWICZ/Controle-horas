@@ -36,3 +36,7 @@ export class ConflictError extends AppError {
 export class RefreshTokenReuseError extends AppError {
   constructor() { super('Refresh token reuse detected', 401, 'REFRESH_TOKEN_REUSE') }
 }
+
+export class ExternalServiceError extends AppError {
+  constructor(message: string) { super(message, 502, 'EXTERNAL_SERVICE_ERROR') }
+}

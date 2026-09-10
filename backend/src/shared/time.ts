@@ -1,4 +1,5 @@
 import type { WorkDay, WorkLog } from '../domain/types.js'
+import type { HolidayCalendar } from './holiday-calendar.js'
 
 const MINUTE_MS = 60_000
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -91,8 +92,19 @@ export function isWorkDay(date: string, workDays: readonly WorkDay[]): boolean {
   return workDays.includes(workDayOf(date))
 }
 
-export function effectiveWorkload(date: string, dailyMinutes: number, workDays: readonly WorkDay[]): number {
-  return dailyMinutes > 0 && isWorkDay(date, workDays) ? dailyMinutes : 0
+/**
+ * Minutes the user is expected to work on a date.
+ *
+ * `calendar` is required on purpose: this is the single function every balance, absence and
+ * hour-bank figure goes through, so a silently empty default would produce wrong numbers
+ * without a compile error.
+ */
+export function effectiveWorkload(
+  date: string, dailyMinutes: number, workDays: readonly WorkDay[], calendar: HolidayCalendar,
+): number {
+  if (dailyMinutes <= 0) return 0
+  if (calendar.isDayOff(date)) return 0
+  return isWorkDay(date, workDays) ? dailyMinutes : 0
 }
 
 export function minutesBetween(start: Date, end: Date): number {

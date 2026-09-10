@@ -152,7 +152,9 @@ th {
 }
 
 .open,
-.completed {
+.completed,
+.holidayBadge,
+.workedOnHolidayBadge {
   display: inline-block;
   border-radius: 999px;
   padding: 0.25rem 0.5rem;
@@ -168,6 +170,20 @@ th {
 .completed {
   background: var(--color-success-bg);
   color: var(--color-success-text);
+}
+
+.holidayBadge,
+.workedOnHolidayBadge {
+  margin-left: 0.4rem;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.workedOnHolidayBadge {
+  border-color: var(--color-warning-text);
+  color: var(--color-warning-text);
 }
 
 @media (max-width: 42rem) {

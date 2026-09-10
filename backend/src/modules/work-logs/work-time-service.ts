@@ -1,4 +1,5 @@
 import type { WorkDay, WorkLog } from '../../domain/types.js'
+import type { HolidayCalendar } from '../../shared/holiday-calendar.js'
 import {
   closedMinutesByDate, eachDate, effectiveWorkload, groupLogsByEntryDate,
   isDayComplete, localDateOf, minutesBetween, minutesByDateIncludingOpen, pausedMinutes,
@@ -21,11 +22,11 @@ export class WorkTimeService {
 
   expectedExit(
     logs: readonly WorkLog[], date: string, dailyMinutes: number, workDays: readonly WorkDay[],
-    lunchEnabled: boolean, lunchMinutes: number,
+    lunchEnabled: boolean, lunchMinutes: number, calendar: HolidayCalendar,
   ): Date | null {
     const firstEntry = [...logs].sort((a, b) => a.entryAt.getTime() - b.entryAt.getTime())[0]?.entryAt
     if (!firstEntry) return null
-    const workload = effectiveWorkload(date, dailyMinutes, workDays)
+    const workload = effectiveWorkload(date, dailyMinutes, workDays, calendar)
     const hasLunch = logs.some((log) => log.closeReason === 'LUNCH')
     const plannedLunch = lunchEnabled && lunchMinutes > 0 && !hasLunch ? lunchMinutes : 0
     return new Date(firstEntry.getTime() + (workload + pausedMinutes(logs) + plannedLunch) * 60_000)
@@ -33,7 +34,7 @@ export class WorkTimeService {
 
   hourBank(
     logs: readonly WorkLog[], dailyMinutes: number, workDays: readonly WorkDay[], fromDate: string, untilDate: string,
-    absenceStartDate = fromDate,
+    absenceStartDate: string, calendar: HolidayCalendar,
   ): number {
     const grouped = groupLogsByEntryDate(logs, this.timeZone)
     const worked = closedMinutesByDate(logs, this.timeZone)
@@ -41,7 +42,7 @@ export class WorkTimeService {
     for (const date of eachDate(fromDate, untilDate)) {
       const dayLogs = grouped.get(date) || []
       const pastDay = date < untilDate
-      const workload = effectiveWorkload(date, dailyMinutes, workDays)
+      const workload = effectiveWorkload(date, dailyMinutes, workDays, calendar)
       const dayWorked = worked.get(date) || 0
       if (dayLogs.length === 0) {
         if (dayWorked > 0) total += dayWorked - workload

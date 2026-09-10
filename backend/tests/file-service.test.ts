@@ -13,7 +13,14 @@ const user: User = {
   workedDayTotals: { total: 0, inSchedule: 0, outsideSchedule: 0 }, createdAt: new Date(), updatedAt: new Date(),
 }
 const historyData = { startDate: '2026-07-13', endDate: '2026-07-13', totalWorkedMinutes: 480, totalBalanceMinutes: 0, hourBankMinutes: 30,
-  pagination: { limit: 90, offset: 0, total: 1 }, days: [{ date: '2026-07-13', firstEntryAt: '2026-07-13T11:00:00.000Z', lastExitAt: '2026-07-13T20:00:00.000Z', workedMinutes: 480, pausedMinutes: 0, balanceMinutes: 0, isComplete: true, workLogs: [] }] }
+  pagination: { limit: 90, offset: 0, total: 1 }, days: [{ date: '2026-07-13', firstEntryAt: '2026-07-13T11:00:00.000Z', lastExitAt: '2026-07-13T20:00:00.000Z', workedMinutes: 480, pausedMinutes: 0, balanceMinutes: 0, isComplete: true, workLogs: [], holiday: null, workedOnHoliday: false }] }
+/** exceljs declares its own Buffer type, which does not line up with Node's in `load`. */
+async function sheetValues(content: Buffer): Promise<unknown[]> {
+  const ExcelJS = (await import('exceljs')).default
+  const workbook = await new ExcelJS.Workbook().xlsx.load(content as never)
+  return workbook.worksheets[0]!.getSheetValues()
+}
+
 function service(methods: Record<string, unknown> = {}) {
   const repositories = { findUserByEmail: vi.fn().mockResolvedValue(user), importClosedWorkLogs: vi.fn().mockResolvedValue(new Map()), ...methods } as unknown as Repositories
   const users = { canAccess: vi.fn().mockResolvedValue(true) } as unknown as UserService
@@ -98,5 +105,31 @@ describe('FileService', () => {
     for await (const chunk of pdf) chunks.push(Buffer.from(chunk))
     expect(Buffer.concat(chunks).subarray(0, 4).toString()).toBe('%PDF')
     expect(history.get).toHaveBeenCalledTimes(2)
+  })
+  it('names the holiday in the exports, so a zeroed day does not read as missing data', async () => {
+    const holidayDay = {
+      date: '2026-07-13', firstEntryAt: null, lastExitAt: null, workedMinutes: 0, pausedMinutes: 0,
+      balanceMinutes: 0, isComplete: true, workLogs: [], workedOnHoliday: false,
+      holiday: {
+        holidayId: 'holiday-1', date: '2026-07-13', holidayDate: '2026-07-13', name: 'Feriado de teste',
+        scope: 'NATIONAL', source: 'NAGER', subdivisionCode: null, dayOff: true, kind: 'HOLIDAY',
+        ruleId: null, ruleObservedDate: null, ruleBridgeDate: null,
+      },
+    }
+    const history = { get: vi.fn().mockResolvedValue({ ...historyData, days: [holidayDay] }) } as unknown as HistoryService
+    const files = new FileService({} as unknown as Repositories, {} as unknown as UserService, history, 'America/Sao_Paulo')
+
+    const rows = (await sheetValues(await files.exportExcel(user, '2026-07-13', '2026-07-13')))
+      .map((row) => JSON.stringify(row))
+    expect(rows.some((row) => row.includes('Feriado') && row.includes('Feriado de teste'))).toBe(true)
+
+    const chunks: Buffer[] = []
+    for await (const chunk of await files.exportPdf(user, '2026-07-13', '2026-07-13')) chunks.push(Buffer.from(chunk))
+    expect(Buffer.concat(chunks).length).toBeGreaterThan(0)
+  })
+
+  it('leaves the holiday column empty on an ordinary day', async () => {
+    const values = await sheetValues(await service().files.exportExcel(user, '2026-07-13', '2026-07-13'))
+    expect(JSON.stringify(values)).not.toContain('Feriado:')
   })
 })

@@ -123,4 +123,43 @@ describe('DashboardPage', () => {
 
     expect(screen.getByText('Carregando Dashboard...')).toBeInTheDocument()
   })
+  function dashboardWith(extra: Record<string, unknown>) {
+    useDashboardMock.mockReturnValue({
+      ...dashboardActions,
+      dashboard: {
+        date: '2026-07-14', dailyWorkloadMinutes: 530,
+        standardEntryTime: '08:30:00', standardExitTime: '17:20:00',
+        lunchEnabled: true, lunchDurationMinutes: 60,
+        workDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'],
+        nextAction: 'ENTRY', expectedExitAt: null,
+        workedMinutesToday: 0, pausedMinutesToday: 0, balanceMinutesToday: 0, hourBankMinutes: 0,
+        workLogs: [], scheduleConfigured: true,
+        holiday: null, workedOnHoliday: false, ...extra,
+      },
+    })
+  }
+
+  const holiday = {
+    holidayId: 'holiday-1', date: '2026-07-14', name: 'Feriado de teste',
+    scope: 'NATIONAL' as const, source: 'NAGER' as const, subdivisionCode: null, dayOff: true,
+  }
+
+  it('explains that a holiday removes the workload of the day', () => {
+    dashboardWith({ holiday })
+    renderDashboard()
+    expect(screen.getByText('Feriado de teste')).toBeInTheDocument()
+    expect(screen.getByText('— feriado: hoje não há carga de trabalho prevista.')).toBeInTheDocument()
+  })
+
+  it('explains that a holiday can still be a working day', () => {
+    dashboardWith({ holiday: { ...holiday, dayOff: false }, balanceMinutesToday: -530 })
+    renderDashboard()
+    expect(screen.getByText('— feriado, mas a carga de trabalho de hoje continua valendo.')).toBeInTheDocument()
+  })
+
+  it('says nothing about holidays on an ordinary day', () => {
+    dashboardWith({})
+    renderDashboard()
+    expect(screen.queryByText('Feriado de teste')).not.toBeInTheDocument()
+  })
 })

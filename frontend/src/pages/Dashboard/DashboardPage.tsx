@@ -12,7 +12,7 @@ import {
 } from '../../utils/formatTime'
 import { normalizeWorkDays } from '../../utils/workDays'
 import styles from './DashboardPage.module.css'
-import type { WorkLog } from '../../types/api'
+import type { HolidayDay, WorkLog } from '../../types/api'
 
 interface WorkloadFormValues { standardEntryTime: string; standardExitTime: string }
 
@@ -27,6 +27,14 @@ function resolveStatusLabel(workLog: WorkLog) {
     return 'Pausa'
   }
   return 'Saída'
+}
+
+function holidayNotice(holiday: HolidayDay): string {
+  if (holiday.kind === 'BRIDGE') return '— emenda de feriado: hoje não há carga de trabalho prevista.'
+  if (holiday.kind === 'OBSERVED') return '— folga transferida deste feriado: hoje não há carga de trabalho prevista.'
+  return holiday.dayOff
+    ? '— feriado: hoje não há carga de trabalho prevista.'
+    : '— feriado, mas a carga de trabalho de hoje continua valendo.'
 }
 
 function DashboardPage() {
@@ -104,6 +112,13 @@ function DashboardPage() {
             <Link className={styles.notificationButton} to="/settings/schedule">
               Configurar jornada
             </Link>
+          </section>
+        )}
+
+        {dashboard.holiday && (
+          <section className={styles.holidayNotice} role="status">
+            <strong>{dashboard.holiday.name}</strong>{' '}
+            <span>{holidayNotice(dashboard.holiday)}</span>
           </section>
         )}
 

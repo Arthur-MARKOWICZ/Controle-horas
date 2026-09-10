@@ -15,10 +15,12 @@ export interface DashboardData {
   nextAction: 'ENTRY' | 'PAUSE_OR_EXIT' | 'RESUME'; expectedExitAt: string | null
   workedMinutesToday: number; pausedMinutesToday: number; balanceMinutesToday: number
   hourBankMinutes: number; workLogs: WorkLog[]; scheduleConfigured: boolean
+  holiday: HolidayDay | null; workedOnHoliday: boolean
 }
 export interface HistoryDay {
   date: string; firstEntryAt: string | null; lastExitAt: string | null; workedMinutes: number
   pausedMinutes: number; balanceMinutes: number; isComplete: boolean; workLogs: WorkLog[]
+  holiday: HolidayDay | null; workedOnHoliday: boolean
 }
 export interface WorkedDayTotals { total: number; inSchedule: number; outsideSchedule: number }
 export interface OutsideScheduleWorkDay { date: string; workedMinutes: number; workLogs: WorkLog[] }
@@ -38,6 +40,31 @@ export interface SchedulePayload {
   standardEntryTime: string; standardExitTime: string; lunchEnabled: boolean
   lunchDurationMinutes: number; workDays: WorkDay[]; workStartDate?: string | null
 }
+
+export type HolidayScope = 'NATIONAL' | 'SUBDIVISION' | 'MUNICIPAL' | 'COMPANY'
+export type HolidaySource = 'NAGER' | 'MANUAL'
+export type HolidayKind = 'HOLIDAY' | 'OBSERVED' | 'BRIDGE'
+export interface HolidayDay {
+  holidayId: string; date: string; holidayDate: string; name: string; scope: HolidayScope
+  source: HolidaySource; subdivisionCode: string | null; dayOff: boolean
+  kind: HolidayKind; ruleId: string | null
+  ruleObservedDate: string | null; ruleBridgeDate: string | null
+}
+export interface HolidayRule {
+  id: string; holidayId: string; holidayDate: string; holidayName: string
+  userId: string | null; userName: string | null; dayOff: boolean
+  observedDate: string | null; bridgeDate: string | null; notes: string | null
+  createdByName: string; createdAt: string; updatedAt: string
+}
+export interface HolidayRulePayload {
+  userIds: string[] | null; dayOff: boolean
+  observedDate?: string | null; bridgeDate?: string | null; notes?: string | null
+}
+export interface HolidayCalendarData { startDate: string; endDate: string; days: HolidayDay[] }
+export interface ManualHolidayPayload {
+  date: string; name: string; scope: 'MUNICIPAL' | 'COMPANY'; subdivisionCode?: string | null
+}
+export interface HolidaySyncResult { year: number; countryCode: string; holidayCount: number; syncedAt: string }
 
 export interface ImportResult {
   importedCount: number; errorCount: number
