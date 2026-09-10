@@ -614,3 +614,43 @@ describe('Holiday move and bridge characterization', () => {
     expect(result.days[0]).toMatchObject({ workedMinutes: 240, balanceMinutes: -240, workedOnHoliday: true })
   })
 })
+
+describe('History period stability characterization', () => {
+  const workTime = new WorkTimeService('America/Sao_Paulo')
+  // Same scenario the PostgreSQL integration suite exercises: seven consecutive work days,
+  // each slightly over the 530 minute workload, summing to +58.
+  const records = [
+    ['2026-08-18T11:21:00Z', '2026-08-18T20:20:00Z'], ['2026-08-19T11:23:00Z', '2026-08-19T20:19:00Z'],
+    ['2026-08-20T11:22:00Z', '2026-08-20T20:19:00Z'], ['2026-08-21T11:06:00Z', '2026-08-21T20:10:00Z'],
+    ['2026-08-24T11:13:00Z', '2026-08-24T20:09:00Z'], ['2026-08-25T11:19:00Z', '2026-08-25T20:19:00Z'],
+    ['2026-08-26T11:23:00Z', '2026-08-26T20:19:00Z'],
+  ].map(([entryAt, exitAt]) => workLog(entryAt!, exitAt!))
+
+  function balanceAt(clock: Date, startDate: string, endDate: string) {
+    const service = new HistoryService(repositories({
+      findWorkLogsOverlappingRange: vi.fn().mockResolvedValue(records),
+      findFirstWorkLog: vi.fn().mockResolvedValue(records[0]),
+      findWorkLogsUntil: vi.fn().mockResolvedValue(records),
+    }), workTime, 'America/Sao_Paulo')
+    const employee = user({ dailyWorkloadMinutes: 530, workStartDate: '2026-08-18' })
+    return service.get(employee, startDate, endDate, 90, 0, clock)
+  }
+
+  it.each([
+    ['while the period is still running', new Date('2026-08-20T15:00:00Z')],
+    ['right after the period ends', new Date('2026-08-27T15:00:00Z')],
+    ['years later', new Date('2030-01-15T15:00:00Z')],
+  ])('reports the same balance for a fully recorded period %s', async (_label, clock) => {
+    const result = await balanceAt(clock, '2026-08-18', '2026-08-26')
+    expect(result.totalBalanceMinutes).toBe(58)
+  })
+
+  it('charges the work days that follow the last record once they are in the past', async () => {
+    // The behaviour the integration suite must not depend on: a wider window keeps absorbing
+    // absences as time passes, which is correct here but makes a fixed expectation drift.
+    const running = await balanceAt(new Date('2026-08-27T15:00:00Z'), '2026-08-18', '2026-08-31')
+    const later = await balanceAt(new Date('2026-09-10T15:00:00Z'), '2026-08-18', '2026-08-31')
+    expect(running.totalBalanceMinutes).toBe(58)
+    expect(later.totalBalanceMinutes).toBe(58 - 3 * 530)
+  })
+})

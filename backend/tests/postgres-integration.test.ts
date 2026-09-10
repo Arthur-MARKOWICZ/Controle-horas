@@ -381,8 +381,11 @@ integration('Fastify with PostgreSQL', () => {
         method: 'POST', url: `/api/users/${childId}/work-logs`, headers: auth(admin.token), payload: { entryAt, exitAt },
       })).statusCode).toBe(200)
     }
+    // The period matches the records exactly. A wider window would also charge the work days
+    // that follow the last record as absences, making the expected balance depend on the day
+    // the suite happens to run. Absences have their own tests.
     const initialHistory = await app.inject({
-      method: 'GET', url: `/api/users/${childId}/history?startDate=2026-08-01&endDate=2026-08-31`, headers: auth(admin.token),
+      method: 'GET', url: `/api/users/${childId}/history?startDate=2026-08-18&endDate=2026-08-26`, headers: auth(admin.token),
     })
     expect(initialHistory.json().data).toMatchObject({
       totalBalanceMinutes: 58, workedDayTotals: { total: 7, inSchedule: 7, outsideSchedule: 0 },
