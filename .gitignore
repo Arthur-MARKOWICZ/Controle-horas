@@ -4,6 +4,8 @@
 **/.env
 **/.env.local
 **/coverage/
+**/playwright-report/
+**/test-results/
 backend/.migration-test/
 backup-*.dump
 backup-*.enc

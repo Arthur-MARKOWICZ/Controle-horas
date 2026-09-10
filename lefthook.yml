@@ -1,0 +1,37 @@
+# Hooks de git do monorepo.
+#
+# O pre-commit roda lint e testes unitarios apenas dos workspaces cujos arquivos
+# entraram no commit: mexer so no frontend nao paga o custo de rodar o backend.
+#
+# Os testes de integracao com PostgreSQL ficam de fora de proposito. Eles sao pulados
+# quando TEST_DATABASE_URL nao esta definida, e exigir um banco de pe para commitar
+# transformaria o hook em algo que todo mundo contorna com --no-verify.
+# A cobertura completa fica no CI, que sobe um PostgreSQL real.
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: backend-lint
+      root: backend/
+      glob: "*.{ts,js,json}"
+      run: npm run lint
+
+    - name: backend-test
+      root: backend/
+      glob: "*.{ts,json}"
+      run: npm test
+
+    - name: frontend-lint
+      root: frontend/
+      glob: "*.{ts,tsx,js,jsx,json}"
+      run: npm run lint
+
+    - name: frontend-test
+      root: frontend/
+      glob: "*.{ts,tsx,css,json}"
+      run: npm test
+
+    - name: mobile-test
+      root: mobile/
+      glob: "*.{js,jsx,json}"
+      run: npm test

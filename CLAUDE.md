@@ -17,6 +17,8 @@ Documentação, commits e conversas são em português; código, identificadores
 
 Cada workspace (`backend/`, `frontend/`, `mobile/`) tem seu próprio `package.json` e `node_modules`; rode os comandos dentro do diretório correspondente. Node 24.
 
+Há um `package.json` na raiz que existe apenas para o Lefthook. Depois de clonar, rode `npm install` na raiz uma vez: o script `prepare` instala o hook de `pre-commit`, que roda lint e testes unitários **só dos workspaces cujos arquivos entraram no commit**. Os testes de integração PostgreSQL ficam de fora do hook de propósito — eles são pulados sem `TEST_DATABASE_URL`, e exigir um banco de pé para commitar faria todo mundo usar `--no-verify`. Para rodar o hook sem commitar: `npm run hooks:run`.
+
 ```bash
 # backend
 npm run dev            # tsx --watch em src/server.ts
@@ -55,7 +57,7 @@ Stack completa local (web + API em `http://localhost:8080`, Swagger em `/swagger
 docker compose -f docker-compose.local.yml up --build
 ```
 
-Antes de entregar qualquer mudança: lint, typecheck, testes e build do workspace afetado. O CI (`.github/workflows/ci.yml`) roda isso nos três workspaces, com PostgreSQL 16 real no backend, e reprova o frontend se o JS inicial gzipado passar de 100 KiB.
+Antes de entregar qualquer mudança: lint, typecheck, testes e build do workspace afetado. O CI (`.github/workflows/ci.yml`) roda em todo push e em todo pull request: lint, typecheck, testes, build e imagens Docker nos três workspaces, com PostgreSQL 16 real no backend e a suíte Playwright num job próprio. Reprova o frontend se o JS inicial gzipado passar de 100 KiB.
 
 ## Arquitetura
 

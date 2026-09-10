@@ -74,6 +74,29 @@ jobs:
           bytes=$(gzip -c "$asset" | wc -c)
           test "$bytes" -lt 102400
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: Install the Playwright browser
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+
   mobile:
     runs-on: ubuntu-latest
     steps:
@@ -93,7 +116,7 @@ jobs:
           EXPO_PUBLIC_API_BASE_URL: http://localhost
 
   images:
-    needs: [backend, frontend, mobile]
+    needs: [backend, frontend, e2e, mobile]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

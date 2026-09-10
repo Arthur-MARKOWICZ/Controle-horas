@@ -1,0 +1,16 @@
+{
+  "name": "controle-horas",
+  "private": true,
+  "description": "Raiz do monorepo. Existe apenas para hospedar os hooks de git; cada workspace mantem o proprio package.json.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "prepare": "lefthook install",
+    "hooks:install": "lefthook install",
+    "hooks:run": "lefthook run pre-commit"
+  },
+  "devDependencies": {
+    "lefthook": "^2.1.12"
+  }
+}
