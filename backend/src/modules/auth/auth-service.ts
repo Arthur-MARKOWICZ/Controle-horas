@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import bcrypt from 'bcryptjs'
-import type { Repositories, RefreshTokenRecord } from '../../database/repositories.js'
+import type { AuthRepository, RefreshTokenRecord } from '../../database/repositories/auth-repository.js'
+import type { UserRepository } from '../../database/repositories/user-repository.js'
 import type { User } from '../../domain/types.js'
 import { ConflictError, InvalidCredentialsError, UnauthorizedError, ValidationError } from '../../shared/errors.js'
 import type { UserService } from '../users/user-service.js'
@@ -31,7 +32,8 @@ export class AccessTokenDenylist {
 
 export class AuthService {
   constructor(
-    private readonly repositories: Repositories,
+    private readonly authRepository: AuthRepository,
+    private readonly userRepository: UserRepository,
     private readonly users: UserService,
     private readonly accessJwt: JwtCodec,
     private readonly refreshJwt: JwtCodec,
@@ -45,8 +47,8 @@ export class AuthService {
 
   async register(input: { name: string; email: string; password: string }, includeRefresh: boolean): Promise<SessionResponse> {
     const email = input.email.trim().toLowerCase()
-    if (await this.repositories.emailExists(email)) throw new ConflictError('Email is already registered')
-    const user = await this.repositories.createUser({
+    if (await this.userRepository.emailExists(email)) throw new ConflictError('Email is already registered')
+    const user = await this.userRepository.createUser({
       name: input.name.trim(), email, passwordHash: await bcrypt.hash(input.password, this.bcryptRounds), role: 'ADMIN',
       managerId: null, createdById: null, workStartDate: null, dailyWorkloadMinutes: 0,
       standardEntryTime: null, standardExitTime: null, lunchEnabled: false, lunchDurationMinutes: 0, workDays: [],
@@ -55,7 +57,7 @@ export class AuthService {
   }
 
   async login(input: { email: string; password: string }, includeRefresh: boolean): Promise<SessionResponse> {
-    const user = await this.repositories.findUserByEmail(input.email.trim().toLowerCase())
+    const user = await this.userRepository.findUserByEmail(input.email.trim().toLowerCase())
     if (!user || !(await bcrypt.compare(input.password, user.passwordHash))) throw new InvalidCredentialsError()
     return this.createSession(user, includeRefresh)
   }
@@ -63,7 +65,7 @@ export class AuthService {
   async createBiometricCredential(user: User): Promise<BiometricCredentialResponse> {
     const credentialId = randomUUID()
     const credentialSecret = randomBytes(32).toString('base64url')
-    await this.repositories.createBiometricCredential({
+    await this.authRepository.createBiometricCredential({
       id: credentialId, userId: user.id, secretHash: hashToken(credentialSecret),
     })
     return { credentialId, credentialSecret, email: user.email }
@@ -73,7 +75,7 @@ export class AuthService {
     input: { email: string; credentialId: string; credentialSecret: string },
     includeRefresh: boolean,
   ): Promise<SessionResponse> {
-    const userId = await this.repositories.useBiometricCredential(
+    const userId = await this.authRepository.useBiometricCredential(
       input.credentialId, hashToken(input.credentialSecret), input.email.trim().toLowerCase(),
     )
     if (!userId) throw new UnauthorizedError('Biometric credentials are invalid')
@@ -81,7 +83,7 @@ export class AuthService {
   }
 
   async revokeBiometricCredential(user: User, credentialId: string): Promise<void> {
-    await this.repositories.revokeBiometricCredential(credentialId, user.id)
+    await this.authRepository.revokeBiometricCredential(credentialId, user.id)
   }
 
   async refresh(token: string, includeRefresh: boolean): Promise<SessionResponse> {
@@ -89,7 +91,7 @@ export class AuthService {
     try { claims = this.refreshJwt.verify(token) } catch { throw new UnauthorizedError('Refresh token is invalid or expired') }
     if (claims.type !== 'refresh' || !claims.family) throw new UnauthorizedError('Refresh token is invalid or expired')
     const next = this.signRefresh(claims.sub, claims.family)
-    const userId = await this.repositories.rotateRefreshToken(claims.jti, hashToken(token), next.record)
+    const userId = await this.authRepository.rotateRefreshToken(claims.jti, hashToken(token), next.record)
     if (userId !== claims.sub) throw new UnauthorizedError('Refresh token is invalid')
     const user = await this.users.byId(userId)
     const access = this.signAccess(user.id)
@@ -106,7 +108,7 @@ export class AuthService {
     if (refreshToken) {
       try {
         const claims = this.refreshJwt.verify(refreshToken)
-        if (claims.type === 'refresh') await this.repositories.revokeRefreshFamily(claims.jti, hashToken(refreshToken))
+        if (claims.type === 'refresh') await this.authRepository.revokeRefreshFamily(claims.jti, hashToken(refreshToken))
       } catch { /* Logout remains idempotent. */ }
     }
   }
@@ -120,33 +122,33 @@ export class AuthService {
 
   async changePassword(user: User, currentPassword: string, newPassword: string): Promise<void> {
     if (!(await bcrypt.compare(currentPassword, user.passwordHash))) throw new InvalidCredentialsError()
-    await this.repositories.updatePassword(user.id, await bcrypt.hash(newPassword, this.bcryptRounds))
-    await this.repositories.revokeAllRefreshTokens(user.id)
-    await this.repositories.revokeAllBiometricCredentials(user.id)
+    await this.authRepository.updatePassword(user.id, await bcrypt.hash(newPassword, this.bcryptRounds))
+    await this.authRepository.revokeAllRefreshTokens(user.id)
+    await this.authRepository.revokeAllBiometricCredentials(user.id)
   }
 
   async requestPasswordReset(emailInput: string): Promise<void> {
     if (!this.emailSender || !this.publicAppUrl) throw new ValidationError('Password reset email is not configured')
-    const user = await this.repositories.findUserByEmail(emailInput.trim().toLowerCase())
+    const user = await this.userRepository.findUserByEmail(emailInput.trim().toLowerCase())
     if (!user) return
     const token = randomBytes(32).toString('base64url')
-    await this.repositories.cleanupPasswordResetTokens()
-    await this.repositories.createPasswordResetToken({
+    await this.authRepository.cleanupPasswordResetTokens()
+    await this.authRepository.createPasswordResetToken({
       id: randomUUID(), userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 30 * 60 * 1_000),
     })
     await this.emailSender.sendPasswordReset({ recipient: user.email, resetUrl: `${this.publicAppUrl}/reset-password?token=${encodeURIComponent(token)}` })
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
-    const reset = await this.repositories.resetPasswordWithToken(hashToken(token), await bcrypt.hash(newPassword, this.bcryptRounds))
+    const reset = await this.authRepository.resetPasswordWithToken(hashToken(token), await bcrypt.hash(newPassword, this.bcryptRounds))
     if (!reset) throw new ValidationError('Password reset link is invalid or expired')
   }
 
   private async createSession(user: User, includeRefresh: boolean): Promise<SessionResponse> {
-    await this.repositories.cleanupRefreshTokens()
+    await this.authRepository.cleanupRefreshTokens()
     const access = this.signAccess(user.id)
     const refresh = this.signRefresh(user.id, randomUUID())
-    await this.repositories.createRefreshToken(refresh.record)
+    await this.authRepository.createRefreshToken(refresh.record)
     return this.response(user, access, refresh, includeRefresh)
   }
 

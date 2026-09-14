@@ -11,7 +11,10 @@ import type { Pool } from 'pg'
 import type { AppConfig } from './config.js'
 import { loadConfig } from './config.js'
 import { createPool } from './database/pool.js'
-import { Repositories } from './database/repositories.js'
+import { AuthRepository } from './database/repositories/auth-repository.js'
+import { HolidayRepository } from './database/repositories/holiday-repository.js'
+import { UserRepository } from './database/repositories/user-repository.js'
+import { WorkLogRepository } from './database/repositories/work-log-repository.js'
 import type { User } from './domain/types.js'
 import { ok } from './domain/types.js'
 import { AppError, ForbiddenError, UnauthorizedError, ValidationError } from './shared/errors.js'
@@ -138,10 +141,13 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   }
 
   const jwtNamespaces = app.jwt
-  const repositories = new Repositories(pool)
-  const users = new UserService(repositories, config.bcryptRounds)
+  const userRepository = new UserRepository(pool)
+  const workLogRepository = new WorkLogRepository(pool)
+  const authRepository = new AuthRepository(pool)
+  const holidayRepository = new HolidayRepository(pool)
+  const users = new UserService(userRepository, authRepository, config.bcryptRounds)
   const auth = new AuthService(
-    repositories, users, jwtNamespaces.access, jwtNamespaces.refresh,
+    authRepository, userRepository, users, jwtNamespaces.access, jwtNamespaces.refresh,
     config.jwtAccessTtlSeconds, config.jwtRefreshTtlSeconds, config.bcryptRounds, new AccessTokenDenylist(),
     config.smtpUrl && config.smtpFrom ? new SmtpPasswordResetEmailSender(config.smtpUrl, config.smtpFrom) : null,
     config.publicAppUrl,
@@ -149,12 +155,12 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   const workTime = new WorkTimeService(config.timeZone)
   const holidayProvider = options.holidayProvider
     || new NagerHolidayProvider(config.nagerBaseUrl, config.nagerTimeoutMs)
-  const holidaySync = new HolidaySyncService(repositories, holidayProvider, app.log)
-  const organizations = new OrganizationResolver(repositories)
-  const holidays = new HolidayService(repositories, users, organizations, holidaySync, HOLIDAY_COUNTRY_CODE)
-  const workLogs = new WorkLogService(repositories, workTime, config.timeZone, holidays)
-  const history = new HistoryService(repositories, workTime, config.timeZone, holidays)
-  const files = new FileService(repositories, users, history, config.timeZone)
+  const holidaySync = new HolidaySyncService(holidayRepository, holidayProvider, app.log)
+  const organizations = new OrganizationResolver(userRepository)
+  const holidays = new HolidayService(holidayRepository, userRepository, users, organizations, holidaySync, HOLIDAY_COUNTRY_CODE)
+  const workLogs = new WorkLogService(workLogRepository, workTime, config.timeZone, holidays)
+  const history = new HistoryService(workLogRepository, workTime, config.timeZone, holidays)
+  const files = new FileService(userRepository, workLogRepository, users, history, config.timeZone)
 
   app.addHook('onRoute', (routeOptions) => {
     const url = routeOptions.url

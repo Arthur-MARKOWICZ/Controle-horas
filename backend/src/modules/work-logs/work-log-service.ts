@@ -1,4 +1,4 @@
-import type { Repositories } from '../../database/repositories.js'
+import type { WorkLogRepository } from '../../database/repositories/work-log-repository.js'
 import type { DashboardResponse, HourBankRecalculationResponse } from '../../domain/contracts.js'
 import { workLogResponse } from '../../domain/contracts.js'
 import type { CloseReason, User, WorkedDayTotals } from '../../domain/types.js'
@@ -11,7 +11,7 @@ import type { WorkTimeService } from './work-time-service.js'
 
 export class WorkLogService {
   constructor(
-    private readonly repositories: Repositories,
+    private readonly workLogs: WorkLogRepository,
     private readonly workTime: WorkTimeService,
     private readonly timeZone: string,
     private readonly holidays: HolidayCalendarSource = NO_HOLIDAY_CALENDAR,
@@ -19,11 +19,11 @@ export class WorkLogService {
 
   async register(user: User, action: 'entry' | 'pause' | 'lunch' | 'resume' | 'exit', now = new Date()): Promise<DashboardResponse> {
     if (action === 'entry' || action === 'resume') {
-      await this.repositories.openWorkLog(user.id, now)
+      await this.workLogs.openWorkLog(user.id, now)
     } else {
       if (action === 'lunch' && !user.lunchEnabled) throw new ValidationError('Lunch registration is disabled for this user.')
       const reason = action.toUpperCase() as CloseReason
-      const closed = await this.repositories.closeOpenWorkLog(user.id, now, reason)
+      const closed = await this.workLogs.closeOpenWorkLog(user.id, now, reason)
       if (!closed) {
         const messages = {
           pause: 'There is no open entry to pause.',
@@ -38,18 +38,18 @@ export class WorkLogService {
 
   async createAdministrative(user: User, entryAt: Date, exitAt: Date) {
     this.validateAdministrativeTimes(entryAt, exitAt)
-    return workLogResponse(await this.repositories.createClosedWorkLog(user.id, entryAt, exitAt))
+    return workLogResponse(await this.workLogs.createClosedWorkLog(user.id, entryAt, exitAt))
   }
 
   async updateAdministrative(user: User, workLogId: string, entryAt: Date, exitAt: Date) {
     this.validateAdministrativeTimes(entryAt, exitAt)
-    const log = await this.repositories.updateClosedWorkLog(user.id, workLogId, entryAt, exitAt)
+    const log = await this.workLogs.updateClosedWorkLog(user.id, workLogId, entryAt, exitAt)
     if (!log) throw new NotFoundError('Work log not found')
     return workLogResponse(log)
   }
 
   async deleteAdministrative(user: User, workLogId: string): Promise<void> {
-    const deleted = await this.repositories.deleteClosedWorkLog(user.id, workLogId)
+    const deleted = await this.workLogs.deleteClosedWorkLog(user.id, workLogId)
     if (!deleted) throw new NotFoundError('Work log not found')
   }
 
@@ -57,7 +57,7 @@ export class WorkLogService {
     const date = localDateOf(now, this.timeZone)
     const start = localDateStart(date, this.timeZone)
     const end = localDateStart(addDays(date, 1), this.timeZone)
-    const logs = await this.repositories.findWorkLogsOverlappingRange(user.id, start, end)
+    const logs = await this.workLogs.findWorkLogsOverlappingRange(user.id, start, end)
     const scheduleConfigured = Boolean(user.standardEntryTime && user.standardExitTime && user.workDays.length)
     const workedMinutesToday = this.workTime.workedMinutesOnDateIncludingOpen(logs, date, now)
     const calendar = await this.holidays.calendarFor(user, date, date)
@@ -86,19 +86,19 @@ export class WorkLogService {
     const date = localDateOf(now, this.timeZone)
     const end = localDateStart(addDays(date, 1), this.timeZone)
     const hourBankMinutes = await this.calculateHourBank(user, date, end)
-    return this.repositories.replaceHourBankMinutes(user.id, hourBankMinutes)
+    return this.workLogs.replaceHourBankMinutes(user.id, hourBankMinutes)
   }
 
   async recalculateWorkedDays(user: User): Promise<WorkedDayTotals> {
-    return this.repositories.recalculateWorkedDayTotals(user.id)
+    return this.workLogs.recalculateWorkedDayTotals(user.id)
   }
 
   private async calculateHourBank(user: User, untilDate: string, end: Date): Promise<number> {
-    const first = await this.repositories.findFirstWorkLog(user.id)
+    const first = await this.workLogs.findFirstWorkLog(user.id)
     const absenceStart = this.workTime.resolvedStartDate(user.workStartDate, first)
     const hourBankStart = this.workTime.hourBankStartDate(user.workStartDate, first)
     if (!hourBankStart) return 0
-    const allLogs = await this.repositories.findWorkLogsUntil(
+    const allLogs = await this.workLogs.findWorkLogsUntil(
       user.id, localDateStart(addDays(hourBankStart, -1), this.timeZone), end,
     )
     // One load for the whole period the hour bank spans, never one per day.

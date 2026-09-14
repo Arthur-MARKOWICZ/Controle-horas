@@ -1,4 +1,4 @@
-import type { HolidayYearSync, Repositories } from '../../database/repositories.js'
+import type { HolidayRepository, HolidayYearSync } from '../../database/repositories/holiday-repository.js'
 import { ExternalServiceError } from '../../shared/errors.js'
 import type { HolidayProvider } from './nager-holiday-provider.js'
 
@@ -19,7 +19,7 @@ export class HolidaySyncService {
   private readonly failureCooldown = new Map<string, number>()
 
   constructor(
-    private readonly repositories: Repositories,
+    private readonly holidays: HolidayRepository,
     private readonly provider: HolidayProvider,
     private readonly logger: SyncLogger | null = null,
     private readonly now: () => number = Date.now,
@@ -48,7 +48,7 @@ export class HolidaySyncService {
   private async pendingYears(years: readonly number[], countryCode: string): Promise<number[]> {
     const unique = [...new Set(years)].sort()
     if (unique.length === 0) return []
-    const syncs = await this.repositories.findHolidayYearSyncs(countryCode, unique)
+    const syncs = await this.holidays.findHolidayYearSyncs(countryCode, unique)
     const succeeded = new Set(syncs.filter((sync) => sync.status === 'SUCCESS').map((sync) => sync.year))
     return unique.filter((year) => !succeeded.has(year) && !this.inCooldown(year, countryCode))
   }
@@ -61,13 +61,13 @@ export class HolidaySyncService {
   private async syncYear(year: number, countryCode: string, force: boolean): Promise<HolidayYearSync> {
     try {
       const holidays = await this.provider.fetchYear(year, countryCode)
-      const sync = await this.repositories.replaceSyncedHolidayYear(countryCode, year, holidays, force)
+      const sync = await this.holidays.replaceSyncedHolidayYear(countryCode, year, holidays, force)
       this.failureCooldown.delete(`${countryCode}-${year}`)
       return sync
     } catch (error) {
       this.failureCooldown.set(`${countryCode}-${year}`, this.now() + FAILURE_COOLDOWN_MS)
       const message = error instanceof Error ? error.message : 'Unknown holiday provider failure'
-      await this.repositories.recordHolidaySyncFailure(countryCode, year, message).catch(() => undefined)
+      await this.holidays.recordHolidaySyncFailure(countryCode, year, message).catch(() => undefined)
       throw error instanceof ExternalServiceError ? error : new ExternalServiceError(message)
     }
   }

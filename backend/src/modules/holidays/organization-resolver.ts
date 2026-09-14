@@ -1,4 +1,4 @@
-import type { Repositories } from '../../database/repositories.js'
+import type { UserRepository } from '../../database/repositories/user-repository.js'
 import type { User } from '../../domain/types.js'
 import { NotFoundError } from '../../shared/errors.js'
 
@@ -15,7 +15,7 @@ export class OrganizationResolver {
   private readonly cache = new Map<string, string>()
 
   constructor(
-    private readonly repositories: Repositories,
+    private readonly users: UserRepository,
     private readonly maxEntries = DEFAULT_MAX_ENTRIES,
   ) {}
 
@@ -24,7 +24,7 @@ export class OrganizationResolver {
     const cached = this.cache.get(user.id)
     if (cached) return cached
 
-    const rootId = await this.repositories.findOrganizationRootId(user.id)
+    const rootId = await this.users.findOrganizationRootId(user.id)
     if (!rootId) throw new NotFoundError('Organization not found for this user')
     if (this.cache.size >= this.maxEntries) this.cache.clear()
     this.cache.set(user.id, rootId)

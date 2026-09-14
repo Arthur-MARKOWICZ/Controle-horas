@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Repositories } from '../src/database/repositories.js'
+import type { UserRepository } from '../src/database/repositories/user-repository.js'
 import type { User } from '../src/domain/types.js'
 import { OrganizationResolver } from '../src/modules/holidays/organization-resolver.js'
 
@@ -7,8 +7,8 @@ function user(id: string, createdById: string | null): User {
   return { id, createdById } as User
 }
 
-function repositories(findOrganizationRootId: unknown): Repositories {
-  return { findOrganizationRootId } as unknown as Repositories
+function repositories(findOrganizationRootId: unknown): UserRepository {
+  return { findOrganizationRootId } as unknown as UserRepository
 }
 
 describe('OrganizationResolver', () => {

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Repositories } from '../src/database/repositories.js'
+import type { AuthRepository } from '../src/database/repositories/auth-repository.js'
+import type { HolidayRepository } from '../src/database/repositories/holiday-repository.js'
+import type { UserRepository } from '../src/database/repositories/user-repository.js'
 import type { User } from '../src/domain/types.js'
 import { HolidayService } from '../src/modules/holidays/holiday-service.js'
 import { HolidaySyncService } from '../src/modules/holidays/holiday-sync-service.js'
@@ -28,7 +30,7 @@ const nationalHoliday: ProvidedHoliday = {
   subdivisionCode: null, scope: 'NATIONAL',
 }
 
-function repositories(methods: Record<string, unknown> = {}): Repositories {
+function repositories(methods: Record<string, unknown> = {}): HolidayRepository & UserRepository {
   return {
     findHolidayYearSyncs: vi.fn().mockResolvedValue([]),
     findResolvedHolidays: vi.fn().mockResolvedValue([]),
@@ -47,16 +49,18 @@ function repositories(methods: Record<string, unknown> = {}): Repositories {
     }),
     recordHolidaySyncFailure: vi.fn().mockResolvedValue(undefined),
     ...methods,
-  } as unknown as Repositories
+  } as unknown as HolidayRepository & UserRepository
 }
+
+const noAuthRepository = {} as unknown as AuthRepository
 
 function provider(fetchYear = vi.fn().mockResolvedValue([nationalHoliday])): HolidayProvider & { fetchYear: typeof fetchYear } {
   return { fetchYear } as HolidayProvider & { fetchYear: typeof fetchYear }
 }
 
-function service(repos: Repositories, holidayProvider: HolidayProvider, now = () => 0): HolidayService {
+function service(repos: HolidayRepository & UserRepository, holidayProvider: HolidayProvider, now = () => 0): HolidayService {
   return new HolidayService(
-    repos, new UserService(repos, 10), new OrganizationResolver(repos),
+    repos, repos, new UserService(repos, noAuthRepository, 10), new OrganizationResolver(repos),
     new HolidaySyncService(repos, holidayProvider, null, now), 'BR',
   )
 }

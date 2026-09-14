@@ -1,4 +1,4 @@
-import type { Repositories } from '../../database/repositories.js'
+import type { WorkLogRepository } from '../../database/repositories/work-log-repository.js'
 import type { HistoryDayResponse, HistoryResponse, OutsideScheduleWorkDaysResponse } from '../../domain/contracts.js'
 import { holidayResponse, workLogResponse } from '../../domain/contracts.js'
 import type { User, WorkDay, WorkLog } from '../../domain/types.js'
@@ -13,7 +13,7 @@ import type { WorkTimeService } from '../work-logs/work-time-service.js'
 
 export class HistoryService {
   constructor(
-    private readonly repositories: Repositories,
+    private readonly workLogs: WorkLogRepository,
     private readonly workTime: WorkTimeService,
     private readonly timeZone: string,
     private readonly holidays: HolidayCalendarSource = NO_HOLIDAY_CALENDAR,
@@ -25,8 +25,8 @@ export class HistoryService {
     if (!Number.isInteger(offset) || offset < 0) throw new ValidationError('offset must be zero or greater')
     const rangeStart = localDateStart(startDate, this.timeZone)
     const rangeEnd = localDateStart(addDays(endDate, 1), this.timeZone)
-    const periodLogs = await this.repositories.findWorkLogsOverlappingRange(user.id, rangeStart, rangeEnd)
-    const first = await this.repositories.findFirstWorkLog(user.id)
+    const periodLogs = await this.workLogs.findWorkLogsOverlappingRange(user.id, rangeStart, rangeEnd)
+    const first = await this.workLogs.findFirstWorkLog(user.id)
     const absenceStart = this.workTime.resolvedStartDate(user.workStartDate, first)
     const hourBankStart = this.workTime.hourBankStartDate(user.workStartDate, first)
     const today = localDateOf(now, this.timeZone)
@@ -39,7 +39,7 @@ export class HistoryService {
     const totalBalanceMinutes = days.reduce((total, day) => total + day.balanceMinutes, 0)
     let hourBankMinutes = 0
     if (hourBankStart && hourBankStart <= today) {
-      const allLogs = await this.repositories.findWorkLogsUntil(
+      const allLogs = await this.workLogs.findWorkLogsUntil(
         user.id, localDateStart(addDays(hourBankStart, -1), this.timeZone), localDateStart(addDays(today, 1), this.timeZone),
       )
       hourBankMinutes = this.workTime.hourBank(
@@ -56,7 +56,7 @@ export class HistoryService {
     if (!Number.isInteger(limit) || limit < 1 || limit > 90) throw new ValidationError('limit must be between 1 and 90')
     if (!Number.isInteger(offset) || offset < 0) throw new ValidationError('offset must be zero or greater')
     const [logs, versions] = await Promise.all([
-      this.repositories.findClosedWorkLogs(user.id), this.repositories.findWorkScheduleVersions(user.id),
+      this.workLogs.findClosedWorkLogs(user.id), this.workLogs.findWorkScheduleVersions(user.id),
     ])
     const minutesByDate = closedMinutesByDate(logs, this.timeZone)
     const dates = [...minutesByDate.keys()]

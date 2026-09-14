@@ -1,4 +1,5 @@
-import type { HolidayRule, Repositories } from '../../database/repositories.js'
+import type { HolidayRepository, HolidayRule } from '../../database/repositories/holiday-repository.js'
+import type { UserRepository } from '../../database/repositories/user-repository.js'
 import type {
   HolidayCalendarResponse, HolidayDayResponse, HolidayRuleResponse, HolidaySyncResponse,
 } from '../../domain/contracts.js'
@@ -85,7 +86,8 @@ function yearsBetween(startDate: string, endDate: string): number[] {
 
 export class HolidayService implements HolidayCalendarSource {
   constructor(
-    private readonly repositories: Repositories,
+    private readonly holidays: HolidayRepository,
+    private readonly userRepository: UserRepository,
     private readonly users: UserService,
     private readonly organizations: OrganizationResolver,
     private readonly sync: HolidaySyncService,
@@ -146,7 +148,7 @@ export class HolidayService implements HolidayCalendarSource {
       throw new ValidationError('subdivisionCode must follow the BR-SP format')
     }
 
-    const holiday = await this.repositories.createManualHoliday({
+    const holiday = await this.holidays.createManualHoliday({
       organizationId, countryCode: this.countryCode, subdivisionCode,
       date: input.date, name, scope: input.scope, createdById: actor.id,
     })
@@ -156,7 +158,7 @@ export class HolidayService implements HolidayCalendarSource {
   async deleteHoliday(actor: User, holidayId: string): Promise<void> {
     const organizationId = await this.organizations.rootIdOf(actor)
     this.requireOrganizationRule(actor, organizationId)
-    const removed = await this.repositories.deleteManualHoliday(holidayId, organizationId)
+    const removed = await this.holidays.deleteManualHoliday(holidayId, organizationId)
     // A synced holiday belongs to the shared catalogue and is not the company's to remove.
     if (!removed) throw new NotFoundError('Manual holiday not found')
   }
@@ -166,14 +168,14 @@ export class HolidayService implements HolidayCalendarSource {
     const organizationId = await this.organizations.rootIdOf(actor)
     // A manager only sees the organization-wide rules plus the ones about their own team.
     const userIds = actor.role === 'MANAGER' ? await this.teamIdsOf(actor) : null
-    const rules = await this.repositories.findHolidayRules(organizationId, userIds)
+    const rules = await this.holidays.findHolidayRules(organizationId, userIds)
     return rules.map(ruleResponse)
   }
 
   async saveRule(actor: User, holidayId: string, input: HolidayRuleInput): Promise<HolidayRuleResponse[]> {
     this.requireRuleManager(actor)
     const organizationId = await this.organizations.rootIdOf(actor)
-    const holiday = await this.repositories.findHolidayById(holidayId)
+    const holiday = await this.holidays.findHolidayById(holidayId)
     if (!holiday) throw new NotFoundError('Holiday not found')
     if (holiday.organizationId && holiday.organizationId !== organizationId) {
       throw new NotFoundError('Holiday not found')
@@ -194,7 +196,7 @@ export class HolidayService implements HolidayCalendarSource {
       throw new ValidationError('observedDate must differ from the holiday date')
     }
 
-    const saved = await this.repositories.upsertHolidayRules(targets.map((userId) => ({
+    const saved = await this.holidays.upsertHolidayRules(targets.map((userId) => ({
       organizationId, holidayId, userId, dayOff: input.dayOff, observedDate, bridgeDate, notes,
       createdById: actor.id, createdByName: actor.name,
     })))
@@ -204,12 +206,12 @@ export class HolidayService implements HolidayCalendarSource {
   async deleteRule(actor: User, ruleId: string): Promise<void> {
     this.requireRuleManager(actor)
     const organizationId = await this.organizations.rootIdOf(actor)
-    const rule = await this.repositories.findHolidayRuleById(ruleId)
+    const rule = await this.holidays.findHolidayRuleById(ruleId)
     if (!rule || rule.organizationId !== organizationId) throw new NotFoundError('Holiday rule not found')
     // Removing an organization-wide rule affects everyone, so it follows the same gate as creating one.
     if (!rule.userId) this.requireOrganizationRule(actor, organizationId)
     else await this.users.requireAccess(actor, rule.userId)
-    await this.repositories.deleteHolidayRule(ruleId, organizationId)
+    await this.holidays.deleteHolidayRule(ruleId, organizationId)
   }
 
   async resync(year: number): Promise<HolidaySyncResponse> {
@@ -227,7 +229,7 @@ export class HolidayService implements HolidayCalendarSource {
 
   private async resolve(user: User, startDate: string, endDate: string) {
     const organizationId = await this.organizations.rootIdOf(user)
-    const rows = await this.repositories.findResolvedHolidays(
+    const rows = await this.holidays.findResolvedHolidays(
       this.countryCode, organizationId, user.id, startDate, endDate,
     )
     return rows.map((row) => ({
@@ -284,7 +286,7 @@ export class HolidayService implements HolidayCalendarSource {
   }
 
   private async teamIdsOf(actor: User): Promise<string[]> {
-    const team = await this.repositories.listManagerTeam(actor.id)
+    const team = await this.userRepository.listManagerTeam(actor.id)
     return team.map((member) => member.id)
   }
 

@@ -65,10 +65,10 @@ Monorepo de quatro partes: `backend/` (Fastify), `frontend/` (React SPA), `mobil
 
 ### Backend
 
-Fluxo fixo `rota/handler → service → repository → SQL parametrizado`. Sem ORM, sem container de DI, sem Redis: `src/app.ts` é o composition root — cria pool, `Repositories` e os services, e registra todas as rotas com JSON Schema. Injeção é explícita por construtor.
+Fluxo fixo `rota/handler → service → repository → SQL parametrizado`. Sem ORM, sem container de DI, sem Redis: `src/app.ts` é o composition root — cria pool, os repositories e os services, e registra todas as rotas com JSON Schema. Injeção é explícita por construtor.
 
 - `src/app.ts` — plugins Fastify, schemas, rotas, tratamento de erro. É onde novas rotas nascem; a regra de negócio nunca fica aqui.
-- `src/database/repositories.ts` — todo o SQL, com colunas listadas e parâmetros posicionais. Nunca concatenar SQL.
+- `src/database/repositories/` — um repository por domínio (`user-repository.ts`, `work-log-repository.ts`, `auth-repository.ts`, `holiday-repository.ts`), cada um só com o SQL do seu domínio, colunas listadas e parâmetros posicionais. Nunca concatenar SQL. Cada service recebe por construtor só os repositories de que precisa.
 - `src/modules/<domínio>/*-service.ts` — auth, users, work-logs (`work-log-service` para registro, `work-time-service` para cálculo), history, files.
 - `src/shared/time.ts` — aritmética de fuso em `America/Sao_Paulo`, incluindo partição de intervalos na meia-noite. Toda conta de horário passa por aqui.
 - `src/domain/` — tipos e contratos de resposta (`DashboardResponse`, `HistoryResponse`, ...).

@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
-import type { Repositories } from '../../database/repositories.js'
+import type { AuthRepository } from '../../database/repositories/auth-repository.js'
+import type { UserRepository } from '../../database/repositories/user-repository.js'
 import type { User, UserRole, WorkDay } from '../../domain/types.js'
 import { USER_ROLES, WORK_DAYS } from '../../domain/types.js'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../shared/errors.js'
@@ -29,16 +30,20 @@ function roleOf(value: string | undefined, fallback: UserRole): UserRole {
 }
 
 export class UserService {
-  constructor(private readonly repositories: Repositories, private readonly bcryptRounds: number) {}
+  constructor(
+    private readonly users: UserRepository,
+    private readonly authRepository: AuthRepository,
+    private readonly bcryptRounds: number,
+  ) {}
 
   async byEmail(email: string): Promise<User> {
-    const user = await this.repositories.findUserByEmail(email.trim().toLowerCase())
+    const user = await this.users.findUserByEmail(email.trim().toLowerCase())
     if (!user) throw new NotFoundError('User not found')
     return user
   }
 
   async byId(id: string): Promise<User> {
-    const user = await this.repositories.findUserById(id)
+    const user = await this.users.findUserById(id)
     if (!user) throw new NotFoundError('User not found')
     return user
   }
@@ -72,13 +77,13 @@ export class UserService {
   }
 
   async updateOwnSchedule(user: User, input: ScheduleInput): Promise<object> {
-    const saved = await this.repositories.saveUser(this.schedule(user, input))
+    const saved = await this.users.saveUser(this.schedule(user, input))
     return this.scheduleResponse(saved)
   }
 
   async canAccess(actor: User, target: User): Promise<boolean> {
     if (actor.id === target.id) return true
-    if (actor.role === 'ADMIN') return this.repositories.isInCreatedSubtree(actor.id, target.id)
+    if (actor.role === 'ADMIN') return this.users.isInCreatedSubtree(actor.id, target.id)
     return actor.role === 'MANAGER' && target.managerId === actor.id
   }
 
@@ -95,8 +100,8 @@ export class UserService {
   async list(actor: User): Promise<object[]> {
     this.requireManager(actor)
     const users = actor.role === 'ADMIN'
-      ? await this.repositories.listCreatedSubtree(actor.id)
-      : await this.repositories.listManagerTeam(actor.id)
+      ? await this.users.listCreatedSubtree(actor.id)
+      : await this.users.listManagerTeam(actor.id)
     return users.map((user) => this.response(user))
   }
 
@@ -104,7 +109,7 @@ export class UserService {
     this.requireManager(actor)
     if (!input.email || !input.password || !input.role) throw new ValidationError('Email, password and role are required')
     const email = input.email.trim().toLowerCase()
-    if (await this.repositories.emailExists(email)) throw new ConflictError('Email is already registered')
+    if (await this.users.emailExists(email)) throw new ConflictError('Email is already registered')
     const role = roleOf(input.role, 'USER')
     if (actor.role === 'MANAGER' && role !== 'USER') throw new ForbiddenError('Managers can only create common users')
     let managerId: string | null = null
@@ -120,7 +125,7 @@ export class UserService {
       lunchDurationMinutes: 0, workDays: [], workStartDate: null, hourBankMinutes: 0,
       workedDayTotals: { total: 0, inSchedule: 0, outsideSchedule: 0 }, createdAt: new Date(), updatedAt: new Date(),
     }, input)
-    const user = await this.repositories.createUser({
+    const user = await this.users.createUser({
       name: input.name.trim(), email, passwordHash: await bcrypt.hash(input.password, this.bcryptRounds), role,
       managerId, createdById: actor.id, workStartDate: blank.workStartDate,
       dailyWorkloadMinutes: blank.dailyWorkloadMinutes, standardEntryTime: blank.standardEntryTime,
@@ -137,7 +142,7 @@ export class UserService {
     if (input.email !== undefined) {
       if (actor.role !== 'ADMIN') throw new ForbiddenError('Only administrators can change user email addresses')
       email = input.email.trim().toLowerCase()
-      if (email !== target.email && await this.repositories.emailExists(email)) throw new ConflictError('Email is already registered')
+      if (email !== target.email && await this.users.emailExists(email)) throw new ConflictError('Email is already registered')
     }
     const role = roleOf(input.role, target.role)
     if (role !== target.role && actor.role !== 'ADMIN') throw new ForbiddenError('Only administrators can change user roles')
@@ -151,8 +156,8 @@ export class UserService {
     }
     const emailChanged = email !== target.email
     target = this.schedule({ ...target, name: input.name.trim(), email, role, managerId }, input)
-    const saved = await this.repositories.saveUser(target)
-    if (emailChanged) await this.repositories.revokeAllBiometricCredentials(target.id)
+    const saved = await this.users.saveUser(target)
+    if (emailChanged) await this.authRepository.revokeAllBiometricCredentials(target.id)
     return this.response(saved)
   }
 
@@ -165,7 +170,7 @@ export class UserService {
       const manager = await this.requireAccess(actor, managerId)
       if (!['ADMIN', 'MANAGER'].includes(manager.role)) throw new ValidationError('Assigned manager must have MANAGER or ADMIN role')
     }
-    return this.response(await this.repositories.saveUser({ ...target, managerId }))
+    return this.response(await this.users.saveUser({ ...target, managerId }))
   }
 
   response(user: User): object {

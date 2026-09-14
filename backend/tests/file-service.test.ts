@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FileService } from '../src/modules/files/file-service.js'
-import type { Repositories } from '../src/database/repositories.js'
+import type { UserRepository } from '../src/database/repositories/user-repository.js'
+import type { WorkLogRepository } from '../src/database/repositories/work-log-repository.js'
 import type { User } from '../src/domain/types.js'
 import { UserService } from '../src/modules/users/user-service.js'
 import { HistoryService } from '../src/modules/history/history-service.js'
@@ -22,10 +23,17 @@ async function sheetValues(content: Buffer): Promise<unknown[]> {
 }
 
 function service(methods: Record<string, unknown> = {}) {
-  const repositories = { findUserByEmail: vi.fn().mockResolvedValue(user), importClosedWorkLogs: vi.fn().mockResolvedValue(new Map()), ...methods } as unknown as Repositories
+  const merged = { findUserByEmail: vi.fn().mockResolvedValue(user), importClosedWorkLogs: vi.fn().mockResolvedValue(new Map()), ...methods }
+  const userRepository = merged as unknown as UserRepository
+  const workLogRepository = merged as unknown as WorkLogRepository
   const users = { canAccess: vi.fn().mockResolvedValue(true) } as unknown as UserService
   const history = { get: vi.fn().mockResolvedValue(historyData) } as unknown as HistoryService
-  return { files: new FileService(repositories, users, history, 'America/Sao_Paulo'), repositories, users, history }
+  return {
+    files: new FileService(userRepository, workLogRepository, users, history, 'America/Sao_Paulo'),
+    repositories: merged as unknown as UserRepository & WorkLogRepository,
+    users,
+    history,
+  }
 }
 
 describe('FileService', () => {
@@ -117,7 +125,9 @@ describe('FileService', () => {
       },
     }
     const history = { get: vi.fn().mockResolvedValue({ ...historyData, days: [holidayDay] }) } as unknown as HistoryService
-    const files = new FileService({} as unknown as Repositories, {} as unknown as UserService, history, 'America/Sao_Paulo')
+    const files = new FileService(
+      {} as unknown as UserRepository, {} as unknown as WorkLogRepository, {} as unknown as UserService, history, 'America/Sao_Paulo',
+    )
 
     const rows = (await sheetValues(await files.exportExcel(user, '2026-07-13', '2026-07-13')))
       .map((row) => JSON.stringify(row))

@@ -1,4 +1,5 @@
-import type { Repositories, ImportedWorkLog } from '../../database/repositories.js'
+import type { UserRepository } from '../../database/repositories/user-repository.js'
+import type { ImportedWorkLog, WorkLogRepository } from '../../database/repositories/work-log-repository.js'
 import type { Readable } from 'node:stream'
 import type { HistoryDayResponse } from '../../domain/contracts.js'
 import type { CloseReason, User } from '../../domain/types.js'
@@ -74,7 +75,8 @@ function holidayNote(holiday: HistoryDayResponse['holiday']): string {
 
 export class FileService {
   constructor(
-    private readonly repositories: Repositories,
+    private readonly userRepository: UserRepository,
+    private readonly workLogRepository: WorkLogRepository,
     private readonly users: UserService,
     private readonly history: HistoryService,
     private readonly timeZone: string,
@@ -119,7 +121,7 @@ export class FileService {
       try {
         const email = row.email.trim().toLowerCase()
         if (!email) throw new ValidationError('email is required')
-        const target = await this.repositories.findUserByEmail(email)
+        const target = await this.userRepository.findUserByEmail(email)
         if (!target) throw new NotFoundError(`User not found for email: ${email}`)
         if (!(await this.users.canAccess(actor, target))) throw new ForbiddenError(`No permission to import records for email: ${email}`)
         const entryAt = this.parseInstant(row.date, row.entryAt, 'entry_at')
@@ -130,7 +132,7 @@ export class FileService {
         valid.push({ rowNumber: row.rowNumber, userId: target.id, entryAt, exitAt, closeReason: reason })
       } catch (error) { errors.push({ row: row.rowNumber, message: error instanceof Error ? error.message : 'Invalid row' }) }
     }
-    const databaseErrors = await this.repositories.importClosedWorkLogs(valid)
+    const databaseErrors = await this.workLogRepository.importClosedWorkLogs(valid)
     for (const [row, message] of databaseErrors) errors.push({ row, message })
     errors.sort((left, right) => left.row - right.row)
     return { importedCount: valid.length - databaseErrors.size, errorCount: errors.length, errors }
